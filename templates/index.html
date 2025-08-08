@@ -39,7 +39,8 @@
   async function httpJSON(url, opts={}){
     const res = await fetch(url, {credentials:'include', ...opts});
     if (res.redirected && res.url.includes('/login')) {
-      alert('请先登录'); window.location.href = res.url; return Promise.reject(new Error('Not logged in'));
+        window.location.href = res.url;
+        return;
     }
     if (!res.ok) {
       const text = await res.text();
