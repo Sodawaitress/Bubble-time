@@ -15,13 +15,16 @@
     .btn:hover { background:#000; color:#fff }
     .btn-ghost:hover { background:#eee; color:#000 }
     .dialog { border:4px solid #000; }
+    .rubber { position:absolute; background:rgba(0,0,0,.08); border:2px dashed #000; pointer-events:none; }
+    .timecol { width:64px; }
+    .gridcol { left:64px; right:8px; position:absolute; }
   </style>
 </head>
 <body>
   <div id="app"></div>
 
   <script type="text/babel">
-  const {useState, useEffect, useMemo} = React;
+  const {useState, useEffect, useMemo, useRef} = React;
 
   const pad = (n)=> String(n).padStart(2,'0');
   const ymd = (d)=> d.toISOString().split('T')[0];
@@ -31,6 +34,20 @@
     const dt = new Date(Date.UTC(y, m-1, d, hh, mm, 0));
     return dt.toISOString();
   };
+  const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
+
+  async function httpJSON(url, opts={}){
+    const res = await fetch(url, {credentials:'include', ...opts});
+    if (res.redirected && res.url.includes('/login')) {
+      alert('请先登录'); window.location.href = res.url; return Promise.reject(new Error('Not logged in'));
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`HTTP ${res.status}: ${text.slice(0,300)}`);
+    }
+    const ct = res.headers.get('content-type') || '';
+    return ct.includes('application/json') ? res.json() : res.text();
+  }
 
   function Header({view, setView, timeSettings, setShowTimeSettings, navigate}){
     return (
@@ -61,36 +78,109 @@
     )
   }
 
-  function TimeGridDay({date, events, onBlankClick, onEventClick, timeSettings}){
+  function TimeGridDay({date, events, onCreateRange, onEventClick, timeSettings}){
     const hours = useMemo(()=>{
       const arr=[]; const {startHour,endHour}=timeSettings;
       if(startHour<=endHour){ for(let h=startHour;h<=endHour;h++) arr.push(h); }
       else { for(let h=startHour;h<24;h++) arr.push(h); for(let h=0;h<=endHour;h++) arr.push(h); }
       return arr;
     },[timeSettings]);
-    const height = hours.length*60;
-    const todayStr = ymd(new Date());
+    const wrapRef = useRef(null);
+    const rbRef = useRef(null);
+    const stateRef = useRef({dragging:false, startY:0, startHM:'', dateStr: ymd(date)});
+
     const dateStr = ymd(date);
+    const todayStr = ymd(new Date());
+
+    function hmFromY(y){
+      const rect = wrapRef.current.getBoundingClientRect();
+      const relY = clamp(y - rect.top, 0, rect.height-1);
+      const minute = Math.round((relY % 60)/5)*5;
+      const hourIdx = Math.floor(relY/60);
+      const h = hours[Math.min(hourIdx, hours.length-1)];
+      return pad(h)+':'+pad(minute);
+    }
+
+    function onMouseDown(e){
+      // 只允许在网格列开始选择（避开左侧时间列）
+      const container = wrapRef.current;
+      if(!container) return;
+      const rect = container.getBoundingClientRect();
+      if(e.clientX - rect.left < 64) return; // 在时间列，忽略
+      stateRef.current.dragging = true;
+      stateRef.current.startY = e.clientY;
+      stateRef.current.startHM = hmFromY(e.clientY);
+      stateRef.current.dateStr = dateStr;
+      const rb = rbRef.current;
+      if(rb){
+        rb.style.display = 'block';
+        rb.style.left = '68px';
+        rb.style.right = '8px';
+        rb.style.top = (e.clientY - rect.top) + 'px';
+        rb.style.height = '2px';
+      }
+      e.preventDefault();
+    }
+
+    function onMouseMove(e){
+      if(!stateRef.current.dragging) return;
+      const container = wrapRef.current;
+      const rect = container.getBoundingClientRect();
+      const y0 = stateRef.current.startY;
+      const y1 = e.clientY;
+      const top = Math.min(y0,y1) - rect.top;
+      let height = Math.abs(y1 - y0);
+      const rb = rbRef.current;
+      if(rb){
+        rb.style.top = clamp(top, 0, rect.height-2) + 'px';
+        rb.style.height = Math.max(2, height) + 'px';
+      }
+      e.preventDefault();
+    }
+
+    function onMouseUp(e){
+      if(!stateRef.current.dragging) return;
+      const container = wrapRef.current;
+      const rect = container.getBoundingClientRect();
+      const y0 = stateRef.current.startY;
+      const y1 = e.clientY;
+      const moved = Math.abs(y1 - y0);
+      stateRef.current.dragging = false;
+      const rb = rbRef.current;
+      if(rb){ rb.style.display='none'; }
+      if(moved < 6){
+        // 太小的拖动，当作取消（不粗鲁弹窗）
+        return;
+      }
+      const startHM = hmFromY(Math.min(y0,y1));
+      let endHM = hmFromY(Math.max(y0,y1));
+      // 至少 5 分钟
+      const [sh,sm] = startHM.split(':').map(Number);
+      const [eh,em] = endHM.split(':').map(Number);
+      let sMins = sh*60+sm, eMins = eh*60+em;
+      if(eMins <= sMins) eMins = sMins + 5;
+      endHM = pad(Math.floor(eMins/60)) + ':' + pad(eMins%60);
+      onCreateRange(stateRef.current.dateStr, startHM, endHM);
+    }
 
     return (
       <div className="border-2 border-black bg-white">
-        <div className="relative select-none" style={{height: height+'px'}}
-          onMouseDown={(e)=>{
-            const rect = e.currentTarget.getBoundingClientRect();
-            const y = Math.max(0, Math.min(rect.height, e.clientY-rect.top));
-            const minute = Math.round((y % 60)/5)*5;
-            const hourIdx = Math.floor(y/60);
-            const hour = hours[Math.min(hourIdx,hours.length-1)];
-            onBlankClick(dateStr, pad(hour)+':'+pad(minute));
-          }}
+        <div className="relative select-none"
+             ref={wrapRef}
+             style={{height: (hours.length*60)+'px'}}
+             onMouseDown={onMouseDown}
+             onMouseMove={onMouseMove}
+             onMouseUp={onMouseUp}
         >
-          {hours.map((h,i)=> (
+          <div ref={rbRef} className="rubber" style={{display:'none'}}></div>
+
+          {hours.map((h)=> (
             <div key={h} className="relative" style={{height:'60px'}}>
               <div className="absolute w-full border-t border-gray-400" style={{top:0}}/>
-              <div className="absolute left-0 top-0 w-16 h-full bg-gray-50 border-r border-black flex items-start pt-1 px-2">
+              <div className="absolute left-0 top-0 timecol h-full bg-gray-50 border-r border-black flex items-start pt-1 px-2">
                 <span className="text-xs font-mono">{h===0?'12AM':h<12?`${h}AM`:h===12?'12PM':`${h-12}PM`}</span>
               </div>
-              <div className="absolute left-16 right-0 top-0 h-full">
+              <div className="absolute gridcol top-0 h-full">
                 <div className="absolute w-full border-t border-gray-300" style={{top:'30px'}}/>
                 {[15,45].map(m=> (
                   <div key={m} className="absolute left-0 w-3 border-t border-gray-400" style={{top:`${m}px`}}/>
@@ -98,6 +188,7 @@
               </div>
             </div>
           ))}
+
           {events.filter(ev=> ev.date===dateStr).map(ev=>{
             const [sh,sm]=ev.time.split(':').map(Number);
             const [eh,em]=(ev.endTime||ev.time).split(':').map(Number);
@@ -116,6 +207,7 @@
               </div>
             )
           })}
+
           {dateStr===todayStr && (()=>{
             const now = new Date(); const h=now.getHours(); const i=hours.indexOf(h);
             if(i===-1) return null;
@@ -136,19 +228,18 @@
     const [events, setEvents] = useState([]);
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState(null);
-    const [form, setForm] = useState({title:'', date: (new Date()).toISOString().split('T')[0], time:'09:00', endTime:'10:00', notes:'', repeat:'none'});
+    const [form, setForm] = useState({title:'', date: ymd(new Date()), time:'09:00', endTime:'10:00', notes:'', repeat:'none'});
     const [timeSettings, setTimeSettings] = useState({ startHour: 7, endHour: 22 });
     const [showTimeSettings, setShowTimeSettings] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const load = async()=>{
       setLoading(true);
-      const start = new Date(); start.setDate(start.getDate()-45);
-      const end = new Date(); end.setDate(end.getDate()+90);
-      const q = new URLSearchParams({ start: start.toISOString(), end: end.toISOString() }).toString();
-      const resp = await fetch('/api/events?'+q);
-      if(resp.ok){
-        const arr = await resp.json();
+      try{
+        const start = new Date(); start.setDate(start.getDate()-45);
+        const end = new Date(); end.setDate(end.getDate()+90);
+        const q = new URLSearchParams({ start: start.toISOString(), end: end.toISOString() }).toString();
+        const arr = await httpJSON('/api/events?'+q);
         const mapped = arr.map(e=>{
           const s = new Date(e.start);
           const ee = new Date(e.end);
@@ -162,10 +253,14 @@
           };
         });
         setEvents(mapped);
+      }catch(err){
+        console.error(err);
+        alert('加载事件失败：'+err.message);
+      }finally{
+        setLoading(false);
       }
-      setLoading(false);
     };
-    React.useEffect(()=>{ load(); },[]);
+    useEffect(()=>{ load(); },[]);
 
     const navigate = (dir)=>{
       const d = new Date(date);
@@ -176,9 +271,9 @@
       setDate(d);
     };
 
-    const openCreate = (dateStr, timeStr)=>{
+    const openCreateFromDrag = (dateStr, startHM, endHM)=>{
       setEditing(null);
-      setForm({ title:'', date:dateStr, time:timeStr, endTime:timeStr, notes:'', repeat:'none'});
+      setForm({ title:'', date:dateStr, time:startHM, endTime:endHM, notes:'', repeat:'none'});
       setFormOpen(true);
     };
 
@@ -190,26 +285,40 @@
         end: toISO(form.date, form.endTime),
         rrule: (form.repeat==='none') ? null : { freq: form.repeat.toUpperCase(), dtstart: toISO(form.date, form.time) }
       };
-      if(editing){
-        const res = await fetch('/api/events/'+editing.id, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-        if(!res.ok) return alert('更新失败');
-      }else{
-        const res = await fetch('/api/events', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-        if(!res.ok) return alert('创建失败');
+      try{
+        if(new Date(payload.end) <= new Date(payload.start)){
+          // 最小 5 分钟
+          const dt = new Date(payload.start);
+          dt.setMinutes(dt.getMinutes()+5);
+          payload.end = dt.toISOString();
+        }
+        if(editing){
+          await httpJSON('/api/events/'+editing.id, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+        }else{
+          await httpJSON('/api/events', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+        }
+        setFormOpen(false); setEditing(null);
+        await load();
+      }catch(err){
+        console.error(err);
+        alert('保存失败：'+err.message);
       }
-      setFormOpen(false); setEditing(null);
-      await load();
     };
 
     const remove = async(onlyThis=false)=>{
       if(!editing) return;
-      const url = onlyThis
-        ? `/api/events/${editing.id}?exdate=${encodeURIComponent(toISO(editing.date, editing.time))}`
-        : `/api/events/${editing.id}`;
-      const res = await fetch(url, {method:'DELETE'});
-      if(!res.ok) return alert('删除失败');
-      setFormOpen(false); setEditing(null);
-      await load();
+      try{
+        const dateISO = toISO(editing.date, editing.time);
+        const url = onlyThis
+          ? `/api/events/${editing.id}?exdate=${encodeURIComponent(dateISO)}`
+          : `/api/events/${editing.id}`;
+        await httpJSON(url, {method:'DELETE'});
+        setFormOpen(false); setEditing(null);
+        await load();
+      }catch(err){
+        console.error(err);
+        alert('删除失败：'+err.message);
+      }
     };
 
     return (
@@ -218,13 +327,17 @@
           <Header view={view} setView={setView} timeSettings={timeSettings}
                   setShowTimeSettings={setShowTimeSettings} navigate={navigate}/>
           {loading && <div className="text-sm text-gray-600 mb-2">加载中…</div>}
-          <TimeGridDay date={date} events={events} timeSettings={timeSettings}
-                      onBlankClick={(ds,ts)=> openCreate(ds,ts)}
-                      onEventClick={(ev)=>{ setEditing(ev); setForm({...ev, repeat: ev.rrule? ev.rrule.freq.toLowerCase():'none'}); setFormOpen(true); }}/>
+          <TimeGridDay
+            date={date}
+            events={events}
+            timeSettings={timeSettings}
+            onCreateRange={openCreateFromDrag}
+            onEventClick={(ev)=>{ setEditing(ev); setForm({...ev, repeat: ev.rrule? ev.rrule.freq.toLowerCase():'none'}); setFormOpen(true); }}
+          />
         </div>
 
         {showTimeSettings && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify中心 p-4 z-50">
             <div className="bg-white dialog p-6 max-w-md w-full">
               <h3 className="text-xl font-bold mb-4">时间设置</h3>
               <div className="grid grid-cols-2 gap-4">
@@ -254,7 +367,7 @@
         )}
 
         {formOpen && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg黑/50 flex items-center justify-center p-4 z-50">
             <div className="bg-white dialog p-6 max-w-md w-full">
               <h3 className="text-xl font-bold mb-4">{editing? '编辑事件':'新事件'}</h3>
               <div className="grid gap-3">
