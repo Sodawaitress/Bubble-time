@@ -1,174 +1,256 @@
-from flask import Flask, send_from_directory, jsonify, request, session, redirect, url_for, render_template
+
 import os
+from datetime import datetime, timedelta
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
+from dateutil.rrule import rrule, DAILY, WEEKLY
+from dateutil import tz
+import bcrypt
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 import json
 import base64
-from datetime import datetime
-import functools
+import secrets
 
-# 尝试导入requests和cloudinary
-try:
-    import requests
-    requests_available = True
-except ImportError:
-    requests_available = False
-    print("警告: requests模块未找到")
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_hex(16)
 
-try:
-    import cloudinary
-    import cloudinary.uploader
-    cloudinary_available = True
-except ImportError:
-    cloudinary_available = False
-    print("警告: Cloudinary模块未找到")
+# Cloudinary setup
+cloudinary.config(
+    cloud_name=os.environ.get("CLOUDINARY_CLOUD_NAME", ""),
+    api_key=os.environ.get("CLOUDINARY_API_KEY", ""),
+    api_secret=os.environ.get("CLOUDINARY_API_SECRET", ""),
+)
 
-app = Flask(__name__, static_folder='static', static_url_path='/static')
-app.config['SECRET_KEY'] = 'planner_secret_key_2025'
+# --------- Simple storage on Cloudinary as RAW JSON ----------
 
-# 使用你podcast的Cloudinary配置
-if cloudinary_available:
-    cloudinary.config( 
-        cloud_name = "dxm0ajjil",
-        api_key = "286612799875297", 
-        api_secret = "EkrlSu4mv50B9Aclc_a4US3ZdX4" 
+def _raw_upload(public_id: str, data: dict):
+    payload = json.dumps(data, ensure_ascii=False)
+    return cloudinary.uploader.upload(
+        "data:application/json;base64," + base64.b64encode(payload.encode("utf-8")).decode("utf-8"),
+        resource_type="raw",
+        public_id=public_id,
+        overwrite=True,
     )
 
-# 简单的管理员密码
-ADMIN_PASSWORD = "planner2025"
-
-# 登录装饰器
-def login_required(view):
-    @functools.wraps(view)
-    def wrapped_view(**kwargs):
-        if not session.get('authenticated'):
-            return redirect(url_for('admin_login'))
-        return view(**kwargs)
-    return wrapped_view
-
-# 主页 - 直接显示日历
-@app.route('/')
-def index():
-    return send_from_directory('static', 'calendar.html')
-
-# 日历页面
-@app.route('/calendar')
-@app.route('/calendar.html')
-def calendar():
-    return send_from_directory('static', 'calendar.html')
-
-# 管理员登录
-@app.route('/admin', methods=['GET', 'POST'])
-def admin_login():
-    if request.method == 'POST':
-        if request.form.get('password') == ADMIN_PASSWORD:
-            session['authenticated'] = True
-            return redirect(url_for('index'))
-        else:
-            return "密码错误", 401
-    
-    return '''
-    <html>
-    <body style="font-family: Arial; max-width: 400px; margin: 100px auto; padding: 20px;">
-        <h2>日历管理员登录</h2>
-        <form method="post">
-            <input type="password" name="password" placeholder="请输入密码" 
-                   style="width: 100%; padding: 10px; margin: 10px 0; border: 2px solid black;">
-            <button type="submit" style="width: 100%; padding: 10px; background: black; color: white; border: none;">
-                登录
-            </button>
-        </form>
-    </body>
-    </html>
-    '''
-
-# API: 获取日历数据
-@app.route('/api/calendar/events', methods=['GET'])
-def get_calendar_events():
-    """从Cloudinary获取日历数据"""
+def _raw_download(public_id: str):
     try:
-        if cloudinary_available and requests_available:
-            # 尝试获取日历数据
-            url = cloudinary.utils.cloudinary_url("calendar_data", resource_type="raw")[0]
-            response = requests.get(url)
-            if response.status_code == 200:
-                data = json.loads(response.text)
-                return jsonify(data)
-        
-        # 返回默认数据
-        return jsonify({
-            "events": [
-                {
-                    "id": 1,
-                    "title": "播客录制",
-                    "date": datetime.now().strftime('%Y-%m-%d'),
-                    "time": "09:00",
-                    "endTime": "10:30",
-                    "location": "录音室",
-                    "notes": "第10期节目录制"
-                }
-            ],
-            "timeSettings": {"startHour": 6, "endHour": 22}
-        })
-    except Exception as e:
-        print(f"获取日历数据出错: {e}")
-        return jsonify({"events": [], "timeSettings": {"startHour": 6, "endHour": 22}}), 500
+        url, _ = cloudinary.utils.cloudinary_url(public_id, resource_type="raw")
+        import requests
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200 and resp.text.strip():
+            return json.loads(resp.text)
+    except Exception:
+        pass
+    return None
 
-# API: 保存日历数据
-@app.route('/api/calendar/events', methods=['POST'])
-@login_required
-def save_calendar_events():
-    """保存日历数据到Cloudinary"""
-    try:
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({"success": False, "message": "无效的数据"}), 400
-        
-        if cloudinary_available:
-            # 添加最后更新时间
-            data['lastUpdated'] = datetime.now().isoformat()
-            
-            # 转换为JSON字符串并上传到Cloudinary
-            data_json = json.dumps(data, ensure_ascii=False)
-            result = cloudinary.uploader.upload(
-                "data:application/json;base64," + base64.b64encode(data_json.encode('utf-8')).decode('utf-8'),
-                resource_type="raw",
-                public_id="calendar_data",
-                overwrite=True
-            )
-            
-            if result.get('secure_url'):
-                return jsonify({
-                    "success": True, 
-                    "message": "日历数据已保存",
-                    "url": result.get('secure_url')
-                })
-        
-        return jsonify({"success": False, "message": "Cloudinary不可用"}), 500
-        
-    except Exception as e:
-        print(f"保存日历数据出错: {e}")
-        return jsonify({"success": False, "message": str(e)}), 500
+def load_users():
+    data = _raw_download("calendar_users")
+    if not data:
+        data = {"users":[]}
+        _raw_upload("calendar_users", data)
+    return data
 
-# 状态检查
-@app.route('/status')
-def status():
-    return jsonify({
-        "app": "独立日历计划器",
-        "cloudinary_available": cloudinary_available,
-        "requests_available": requests_available,
-        "authenticated": session.get('authenticated', False),
-        "cloudinary_config": {
-            "cloud_name": "dxm0ajjil",
-            "upload_preset": "podcast_upload"
+def save_users(data):
+    _raw_upload("calendar_users", data)
+
+def ensure_user_events(user_id: str):
+    pid = f"events_{user_id}"
+    data = _raw_download(pid)
+    if not data:
+        data = {"events": [], "exdates": []}
+        _raw_upload(pid, data)
+    return data
+
+def save_user_events(user_id: str, data):
+    _raw_upload(f"events_{user_id}", data)
+
+# --------- Helpers ----------
+
+def current_user():
+    return session.get("user")
+
+def login_required(fn):
+    from functools import wraps
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not current_user():
+            return redirect(url_for("login"))
+        return fn(*args, **kwargs)
+    return wrapper
+
+# --------- Routes ----------
+
+@app.route("/")
+def home():
+    return render_template("index.html", title="Calendar")
+
+@app.route("/register", methods=["GET","POST"])
+def register():
+    if request.method == "POST":
+        email = request.form.get("email","").strip().lower()
+        pw = request.form.get("password","")
+        if not email or not pw:
+            flash("缺少邮箱或密码")
+            return redirect(url_for("register"))
+        users = load_users()
+        if any(u["email"]==email for u in users["users"]):
+            flash("该邮箱已注册")
+            return redirect(url_for("login"))
+        hashed = bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        user = {
+            "id": secrets.token_hex(8),
+            "email": email,
+            "password": hashed,
+            "timezone": "Asia/Shanghai",
+            "dayStart": "07:40",
+            "dayEnd": "22:00",
+            "slotGranularity": 5,
         }
-    })
+        users["users"].append(user)
+        save_users(users)
+        session["user"] = {k:v for k,v in user.items() if k!="password"}
+        return redirect(url_for("home"))
+    return render_template("login.html", title="注册").replace("登录","注册")
 
-# 登出
-@app.route('/logout')
+@app.route("/login", methods=["GET","POST"])
+def login():
+    if request.method == "POST":
+        email = request.form.get("email","").strip().lower()
+        pw = request.form.get("password","")
+        users = load_users()
+        found = next((u for u in users["users"] if u["email"]==email), None)
+        if not found:
+            flash("用户不存在")
+            return redirect(url_for("login"))
+        if not bcrypt.checkpw(pw.encode("utf-8"), found["password"].encode("utf-8")):
+            flash("密码不正确")
+            return redirect(url_for("login"))
+        session["user"] = {k:v for k,v in found.items() if k!="password"}
+        return redirect(url_for("home"))
+    return render_template("login.html", title="登录")
+
+@app.route("/logout", methods=["POST"])
 def logout():
-    session.pop('authenticated', None)
-    return redirect(url_for('index'))
+    session.clear()
+    return redirect(url_for("home"))
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5001))
-    app.run(host='0.0.0.0', port=port, debug=False)
+@app.route("/settings", methods=["GET","POST"])
+@login_required
+def settings():
+    u = current_user()
+    if request.method == "POST":
+        users = load_users()
+        idx = next(i for i,x in enumerate(users["users"]) if x["id"]==u["id"])
+        users["users"][idx]["timezone"] = request.form.get("timezone") or "Asia/Shanghai"
+        users["users"][idx]["dayStart"] = request.form.get("dayStart") or "07:40"
+        users["users"][idx]["dayEnd"] = request.form.get("dayEnd") or "22:00"
+        users["users"][idx]["slotGranularity"] = int(request.form.get("slotGranularity") or 5)
+        save_users(users)
+        session["user"] = {k:v for k,v in users["users"][idx].items() if k!="password"}
+        flash("设置已保存")
+        return redirect(url_for("settings"))
+    users = load_users()
+    fresh = next(x for x in users["users"] if x["id"]==u["id"])
+    class Obj: pass
+    o = Obj()
+    o.__dict__.update({k:v for k,v in fresh.items() if k!="password"})
+    return render_template("settings.html", title="设置", user=o)
+
+# --------- Events API ----------
+
+def expand_events(evts, exdates, start_iso, end_iso, tzname):
+    start = datetime.fromisoformat(start_iso.replace("Z","+00:00"))
+    end = datetime.fromisoformat(end_iso.replace("Z","+00:00"))
+    out = []
+    timezone = tz.gettz(tzname) if tzname else tz.UTC
+    exset = set(exdates or [])
+    for e in evts:
+        base = {
+            "id": e["id"],
+            "title": e.get("title",""),
+            "notes": e.get("notes",""),
+        }
+        r = e.get("rrule")
+        if r:
+            freq = r.get("freq")
+            dtstart = datetime.fromisoformat(r.get("dtstart").replace("Z","+00:00"))
+            until = end
+            interval = 1
+            if freq == "DAILY":
+                rule = rrule(DAILY, dtstart=dtstart, until=until, interval=interval)
+            elif freq == "WEEKLY":
+                rule = rrule(WEEKLY, dtstart=dtstart, until=until, interval=interval)
+            else:
+                rule = []
+            duration = datetime.fromisoformat(e["end"].replace("Z","+00:00")) - datetime.fromisoformat(e["start"].replace("Z","+00:00"))
+            for occ in rule:
+                if occ < start or occ >= end:
+                    continue
+                occ_iso = occ.astimezone(tz.UTC).isoformat().replace("+00:00","Z")
+                if occ_iso in exset:
+                    continue
+                item = dict(base)
+                item["start"] = occ_iso
+                item["end"] = (occ + duration).astimezone(tz.UTC).isoformat().replace("+00:00","Z")
+                item["rrule"] = r
+                out.append(item)
+        else:
+            s = datetime.fromisoformat(e["start"].replace("Z","+00:00"))
+            if s >= start and s < end:
+                out.append({**base, "start": e["start"], "end": e["end"]})
+    return out
+
+from flask import Response
+
+@app.route("/api/events", methods=["GET","POST"])
+@login_required
+def api_events():
+    u = current_user()
+    dataset = ensure_user_events(u["id"])
+    if request.method == "GET":
+        start = request.args.get("start") or (datetime.utcnow() - timedelta(days=7)).isoformat() + "Z"
+        end = request.args.get("end") or (datetime.utcnow() + timedelta(days=60)).isoformat() + "Z"
+        expanded = expand_events(dataset["events"], dataset.get("exdates",[]), start, end, session["user"].get("timezone","UTC"))
+        return jsonify(expanded)
+    else:
+        data = request.get_json(force=True)
+        new_evt = {
+            "id": secrets.token_hex(8),
+            "title": data.get("title",""),
+            "notes": data.get("notes",""),
+            "start": data.get("start"),
+            "end": data.get("end"),
+            "rrule": data.get("rrule"),
+        }
+        dataset["events"].append(new_evt)
+        save_user_events(u["id"], dataset)
+        return jsonify({"ok":True, "id": new_evt["id"]}), 201
+
+@app.route("/api/events/<eid>", methods=["PUT","DELETE"])
+@login_required
+def api_event_item(eid):
+    u = current_user()
+    dataset = ensure_user_events(u["id"])
+    evts = dataset["events"]
+    target = next((e for e in evts if e["id"]==eid), None)
+    if not target:
+        return jsonify({"error":"not found"}), 404
+    if request.method == "PUT":
+        data = request.get_json(force=True)
+        for key in ["title","notes","start","end","rrule"]:
+            if key in data and data[key] is not None:
+                target[key] = data[key]
+        save_user_events(u["id"], dataset)
+        return jsonify({"ok":True})
+    else:
+        exdate = request.args.get("exdate")
+        if exdate and target.get("rrule"):
+            dataset.setdefault("exdates", []).append(exdate)
+        else:
+            evts[:] = [e for e in evts if e["id"]!=eid]
+        save_user_events(u["id"], dataset)
+        return jsonify({"ok":True})
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
