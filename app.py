@@ -5,26 +5,35 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 from dateutil.rrule import rrule, DAILY, WEEKLY
 from dateutil import tz
 import bcrypt
-import cloudinary
-import cloudinary.uploader
-import cloudinary.api
-import json
-import base64
-import secrets
+import json, base64, secrets
+
+# Optional Cloudinary
+USE_CLOUD = all([
+    os.environ.get("CLOUDINARY_CLOUD_NAME"),
+    os.environ.get("CLOUDINARY_API_KEY"),
+    os.environ.get("CLOUDINARY_API_SECRET"),
+])
+
+if USE_CLOUD:
+    import cloudinary
+    import cloudinary.uploader
+    import cloudinary.api
+    cloudinary.config(
+        cloud_name=os.environ.get("CLOUDINARY_CLOUD_NAME"),
+        api_key=os.environ.get("CLOUDINARY_API_KEY"),
+        api_secret=os.environ.get("CLOUDINARY_API_SECRET"),
+    )
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_hex(16)
 
-# Cloudinary setup
-cloudinary.config(
-    cloud_name=os.environ.get("CLOUDINARY_CLOUD_NAME", ""),
-    api_key=os.environ.get("CLOUDINARY_API_KEY", ""),
-    api_secret=os.environ.get("CLOUDINARY_API_SECRET", ""),
-)
+# ---------- Storage Layer (Cloudinary or Local JSON) ----------
 
-# --------- Simple storage on Cloudinary as RAW JSON ----------
+STORAGE_DIR = os.path.join(os.path.dirname(__file__), "storage")
+os.makedirs(STORAGE_DIR, exist_ok=True)
 
-def _raw_upload(public_id: str, data: dict):
+def _cloud_upload(public_id: str, data: dict):
+    import cloudinary.uploader, cloudinary.utils
     payload = json.dumps(data, ensure_ascii=False)
     return cloudinary.uploader.upload(
         "data:application/json;base64," + base64.b64encode(payload.encode("utf-8")).decode("utf-8"),
@@ -33,10 +42,10 @@ def _raw_upload(public_id: str, data: dict):
         overwrite=True,
     )
 
-def _raw_download(public_id: str):
+def _cloud_download(public_id: str):
     try:
+        import requests, cloudinary.utils
         url, _ = cloudinary.utils.cloudinary_url(public_id, resource_type="raw")
-        import requests
         resp = requests.get(url, timeout=10)
         if resp.status_code == 200 and resp.text.strip():
             return json.loads(resp.text)
@@ -44,28 +53,63 @@ def _raw_download(public_id: str):
         pass
     return None
 
+def _local_path(name: str):
+    return os.path.join(STORAGE_DIR, f"{name}.json")
+
+def _local_write(name: str, data: dict):
+    with open(_local_path(name), "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+
+def _local_read(name: str):
+    p = _local_path(name)
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+def _save(name: str, data: dict):
+    if USE_CLOUD:
+        try:
+            _cloud_upload(name, data)
+            return
+        except Exception as e:
+            # Fallback to local if cloud fails
+            pass
+    _local_write(name, data)
+
+def _load(name: str):
+    if USE_CLOUD:
+        try:
+            data = _cloud_download(name)
+            if data is not None:
+                return data
+        except Exception:
+            pass
+    local = _local_read(name)
+    return local
+
 def load_users():
-    data = _raw_download("calendar_users")
+    data = _load("calendar_users")
     if not data:
         data = {"users":[]}
-        _raw_upload("calendar_users", data)
+        _save("calendar_users", data)
     return data
 
 def save_users(data):
-    _raw_upload("calendar_users", data)
+    _save("calendar_users", data)
 
 def ensure_user_events(user_id: str):
-    pid = f"events_{user_id}"
-    data = _raw_download(pid)
+    key = f"events_{user_id}"
+    data = _load(key)
     if not data:
         data = {"events": [], "exdates": []}
-        _raw_upload(pid, data)
+        _save(key, data)
     return data
 
 def save_user_events(user_id: str, data):
-    _raw_upload(f"events_{user_id}", data)
+    _save(f"events_{user_id}", data)
 
-# --------- Helpers ----------
+# ---------- Helpers ----------
 
 def current_user():
     return session.get("user")
@@ -79,11 +123,23 @@ def login_required(fn):
         return fn(*args, **kwargs)
     return wrapper
 
-# --------- Routes ----------
+# ---------- Routes ----------
 
 @app.route("/")
 def home():
     return render_template("index.html", title="Calendar")
+
+@app.route("/status")
+def status():
+    return jsonify({
+        "ok": True,
+        "use_cloudinary": USE_CLOUD,
+        "has_cloud_name": bool(os.environ.get("CLOUDINARY_CLOUD_NAME")),
+        "has_api_key": bool(os.environ.get("CLOUDINARY_API_KEY")),
+        "has_api_secret": bool(os.environ.get("CLOUDINARY_API_SECRET")),
+        "storage_path": os.path.abspath(STORAGE_DIR),
+        "user": bool(current_user())
+    })
 
 @app.route("/register", methods=["GET","POST"])
 def register():
@@ -135,6 +191,8 @@ def logout():
     session.clear()
     return redirect(url_for("home"))
 
+# Settings page is optional in this pared-down version; UI handles time window locally.
+# Left implemented if user navigates to /settings accidentally.
 @app.route("/settings", methods=["GET","POST"])
 @login_required
 def settings():
@@ -155,15 +213,14 @@ def settings():
     class Obj: pass
     o = Obj()
     o.__dict__.update({k:v for k,v in fresh.items() if k!="password"})
-    return render_template("settings.html", title="设置", user=o)
+    return render_template("login.html", title="设置（占位）")
 
-# --------- Events API ----------
+# ---------- Events API ----------
 
 def expand_events(evts, exdates, start_iso, end_iso, tzname):
     start = datetime.fromisoformat(start_iso.replace("Z","+00:00"))
     end = datetime.fromisoformat(end_iso.replace("Z","+00:00"))
     out = []
-    timezone = tz.gettz(tzname) if tzname else tz.UTC
     exset = set(exdates or [])
     for e in evts:
         base = {
@@ -178,23 +235,24 @@ def expand_events(evts, exdates, start_iso, end_iso, tzname):
             until = end
             interval = 1
             if freq == "DAILY":
-                rule = rrule(DAILY, dtstart=dtstart, until=until, interval=interval)
+                from dateutil.rrule import DAILY as FREQ
             elif freq == "WEEKLY":
-                rule = rrule(WEEKLY, dtstart=dtstart, until=until, interval=interval)
+                from dateutil.rrule import WEEKLY as FREQ
             else:
-                rule = []
+                FREQ = None
             duration = datetime.fromisoformat(e["end"].replace("Z","+00:00")) - datetime.fromisoformat(e["start"].replace("Z","+00:00"))
-            for occ in rule:
-                if occ < start or occ >= end:
-                    continue
-                occ_iso = occ.astimezone(tz.UTC).isoformat().replace("+00:00","Z")
-                if occ_iso in exset:
-                    continue
-                item = dict(base)
-                item["start"] = occ_iso
-                item["end"] = (occ + duration).astimezone(tz.UTC).isoformat().replace("+00:00","Z")
-                item["rrule"] = r
-                out.append(item)
+            if FREQ:
+                for occ in rrule(FREQ, dtstart=dtstart, until=until, interval=interval):
+                    if occ < start or occ >= end:
+                        continue
+                    occ_iso = occ.isoformat().replace("+00:00","Z")
+                    if occ_iso in exset:
+                        continue
+                    item = dict(base)
+                    item["start"] = occ_iso
+                    item["end"] = (occ + duration).isoformat().replace("+00:00","Z")
+                    item["rrule"] = r
+                    out.append(item)
         else:
             s = datetime.fromisoformat(e["start"].replace("Z","+00:00"))
             if s >= start and s < end:
@@ -211,7 +269,7 @@ def api_events():
     if request.method == "GET":
         start = request.args.get("start") or (datetime.utcnow() - timedelta(days=7)).isoformat() + "Z"
         end = request.args.get("end") or (datetime.utcnow() + timedelta(days=60)).isoformat() + "Z"
-        expanded = expand_events(dataset["events"], dataset.get("exdates",[]), start, end, session["user"].get("timezone","UTC"))
+        expanded = expand_events(dataset["events"], dataset.get("exdates",[]), start, end, None)
         return jsonify(expanded)
     else:
         data = request.get_json(force=True)
