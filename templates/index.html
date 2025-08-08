@@ -1,1 +1,330 @@
-{% extends "layout.html" %}{% block head %}<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet" /><script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script><script src="https://cdn.jsdelivr.net/npm/rrule@2.7.2/dist/es5/rrule-tz.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@fullcalendar/rrule@6.1.15/index.global.min.js"></script>{% endblock %}{% block content %}{% if not session.get('user') %}<div class="card"><h2>欢迎</h2><p>请先 <a href="/login">登录</a> 或 <a href="/register">注册</a>。</p></div>{% else %}<div class="toolbar"><div><button id="prevBtn">←</button><button id="todayBtn">今天</button><button id="nextBtn">→</button></div><div><select id="viewSelect"><option value="timeGridDay">Day</option><option value="timeGridThreeDay">3 Days</option><option value="timeGridSevenDay">7 Days</option><option value="dayGridMonth">Month</option></select></div></div><div id="calendar"></div><dialog id="eventDialog"><form method="dialog" id="eventForm" class="form"><h3 id="dlgTitle">新事件</h3><input type="hidden" name="id" id="evtId"><label>标题 <input type="text" name="title" id="evtTitle" required></label><label>备注 <textarea name="notes" id="evtNotes"></textarea></label><label>重复<select id="evtRepeat"><option value="">不重复</option><option value="DAILY">每天</option><option value="WEEKLY">每周（同一天）</option></select></label><menu class="dialog-actions"><button value="cancel">取消</button><button id="saveBtn" value="default">保存</button></menu></form></dialog><script>const user = {{ session.get('user')|tojson }};const userSettings = {timezone: user.timezone || 'Asia/Shanghai',start: (user.dayStart || '07:40') + ':00',end: (user.dayEnd || '22:00') + ':00',granularity: (user.slotGranularity || 5)};const calendarEl = document.getElementById('calendar');const dialogEl = document.getElementById('eventDialog');const formEl = document.getElementById('eventForm');const viewSelect = document.getElementById('viewSelect');const calendar = new FullCalendar.Calendar(calendarEl, {timeZone: userSettings.timezone,initialView: 'timeGridDay',headerToolbar: false,selectable: true,editable: true,slotMinTime: userSettings.start,slotMaxTime: userSettings.end,slotDuration: `00:${String(userSettings.granularity).padStart(2,'0')}:00`,expandRows: true,nowIndicator: true,height: 'auto',views: {timeGridThreeDay: { type: 'timeGrid', duration: { days: 3 } },timeGridSevenDay: { type: 'timeGrid', duration: { days: 7 } }},eventSources: [{url: '/api/events',method: 'GET',failure: () => alert('加载事件失败')}],select: async (info) => {formEl.reset();document.getElementById('evtId').value='';document.getElementById('evtTitle').value='';document.getElementById('evtNotes').value='';document.getElementById('evtRepeat').value='';dialogEl.showModal();formEl.onsubmit = async (e) => {e.preventDefault();const payload = {title: document.getElementById('evtTitle').value,notes: document.getElementById('evtNotes').value,start: info.startStr,end: info.endStr,rrule: (()=>{const v = document.getElementById('evtRepeat').value;if(!v) return null;const rule = { freq: v, dtstart: info.startStr };return rule;})()};const res = await fetch('/api/events', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});if(res.ok){ calendar.refetchEvents(); dialogEl.close(); } else alert('创建失败');};},eventDrop: async (info) => {await updateEventTime(info);},eventResize: async (info) => {await updateEventTime(info);},eventClick: (info) => {const action = window.prompt('输入 d 删除；e 编辑；x 仅删除这一次', 'e');if(action === 'd'){fetch(`/api/events/${info.event.id}`, {method:'DELETE'}).then(r=>{ if(r.ok) info.event.remove(); else alert('删除失败'); });} else if(action === 'x'){fetch(`/api/events/${info.event.id}?exdate=${encodeURIComponent(info.event.startStr)}`, {method:'DELETE'}).then(r=>{ if(r.ok) calendar.refetchEvents(); else alert('删除失败'); });} else if(action === 'e'){formEl.reset();document.getElementById('evtId').value=info.event.id;document.getElementById('evtTitle').value=info.event.title;document.getElementById('evtNotes').value=info.event.extendedProps.notes || '';document.getElementById('evtRepeat').value=info.event.extendedProps.rrule? info.event.extendedProps.rrule.freq: '';dialogEl.showModal();formEl.onsubmit = async (e) => {e.preventDefault();const payload = {title: document.getElementById('evtTitle').value,notes: document.getElementById('evtNotes').value,rrule: (()=>{const v = document.getElementById('evtRepeat').value;if(!v) return null;const rule = { freq: v, dtstart: info.event.startStr };return rule;})()};const res = await fetch(`/api/events/${info.event.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});if(res.ok){ calendar.refetchEvents(); dialogEl.close(); } else alert('更新失败');};}}});async function updateEventTime(info){const payload = { start: info.event.startStr, end: info.event.endStr };const res = await fetch(`/api/events/${info.event.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});if(!res.ok){ alert('保存失败'); info.revert(); }}document.getElementById('prevBtn').onclick = ()=>calendar.prev();document.getElementById('nextBtn').onclick = ()=>calendar.next();document.getElementById('todayBtn').onclick = ()=>calendar.today();viewSelect.onchange = ()=>calendar.changeView(viewSelect.value);calendar.render();</script>{% endif %}{% endblock %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>黑白日历</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/umd/lucide.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html,body{background:#fff;color:#000}
+    .bw { filter: grayscale(1); }
+    .btn { border:2px solid #000; padding:.5rem .75rem; }
+    .btn:hover { background:#000; color:#fff }
+    .btn-ghost:hover { background:#eee; color:#000 }
+    .dialog { border:4px solid #000; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script type="text/babel">
+  const {useState, useEffect, useMemo} = React;
+  const { Calendar, Clock } = lucide;
+
+  const pad = (n)=> String(n).padStart(2,'0');
+  const ymd = (d)=> d.toISOString().split('T')[0];
+  const toISO = (dateStr, timeStr)=> {
+    const [y,m,d] = dateStr.split('-').map(Number);
+    const [hh,mm] = timeStr.split(':').map(Number);
+    const dt = new Date(Date.UTC(y, m-1, d, hh, mm, 0));
+    return dt.toISOString();
+  };
+
+  function Header({view, setView, timeSettings, setShowTimeSettings, navigate}){
+    return (
+      <div className="border-b-2 border-black pb-4 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Calendar className="w-7 h-7" />
+            <h1 className="text-2xl font-bold">黑白日历</h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={()=>setShowTimeSettings(true)} className="btn btn-ghost flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              {pad(timeSettings.startHour)}:00–{pad(timeSettings.endHour)}:00
+            </button>
+            <div className="flex border-2 border-black">
+              {['day','3day','week','month'].map(k=> (
+                <button key={k}
+                  onClick={()=>setView(k)}
+                  className={`px-4 py-2 border-r-2 border-black last:border-r-0 ${view===k?'bg-black text-white':'hover:bg-gray-100'}`}>
+                  {{day:'日', '3day':'3天', week:'周', month:'月'}[k]}
+                </button>
+              ))}
+            </div>
+            <button onClick={()=>navigate(-1)} className="btn btn-ghost">←</button>
+            <button onClick={()=>navigate(1)} className="btn btn-ghost">→</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  function TimeGridDay({date, events, onBlankClick, onEventClick, timeSettings}){
+    const hours = useMemo(()=>{
+      const arr=[]; const {startHour,endHour}=timeSettings;
+      if(startHour<=endHour){ for(let h=startHour;h<=endHour;h++) arr.push(h); }
+      else { for(let h=startHour;h<24;h++) arr.push(h); for(let h=0;h<=endHour;h++) arr.push(h); }
+      return arr;
+    },[timeSettings]);
+    const height = hours.length*60;
+    const todayStr = ymd(new Date());
+    const dateStr = ymd(date);
+
+    return (
+      <div className="border-2 border-black bg-white">
+        <div className="relative select-none" style={{height: height+'px'}}
+          onMouseDown={(e)=>{
+            const rect = e.currentTarget.getBoundingClientRect();
+            const y = Math.max(0, Math.min(rect.height, e.clientY-rect.top));
+            const minute = Math.round((y % 60)/5)*5;
+            const hourIdx = Math.floor(y/60);
+            const hour = hours[Math.min(hourIdx,hours.length-1)];
+            onBlankClick(dateStr, pad(hour)+':'+pad(minute));
+          }}
+        >
+          {hours.map((h,i)=> (
+            <div key={h} className="relative" style={{height:'60px'}}>
+              <div className="absolute w-full border-t border-gray-400" style={{top:0}}/>
+              <div className="absolute left-0 top-0 w-16 h-full bg-gray-50 border-r border-black flex items-start pt-1 px-2">
+                <span className="text-xs font-mono">{h===0?'12AM':h<12?`${h}AM`:h===12?'12PM':`${h-12}PM`}</span>
+              </div>
+              <div className="absolute left-16 right-0 top-0 h-full">
+                <div className="absolute w-full border-t border-gray-300" style={{top:'30px'}}/>
+                {[15,45].map(m=> (
+                  <div key={m} className="absolute left-0 w-3 border-t border-gray-400" style={{top:`${m}px`}}/>
+                ))}
+              </div>
+            </div>
+          ))}
+          {events.filter(ev=> ev.date===dateStr).map(ev=>{
+            const [sh,sm]=ev.time.split(':').map(Number);
+            const [eh,em]=(ev.endTime||ev.time).split(':').map(Number);
+            const si = hours.indexOf(sh); if(si===-1) return null;
+            const ei = hours.indexOf(eh);
+            const sy = si*60 + sm, ey = (ei!==-1? ei*60+em : sy+60);
+            const h = Math.max(ey-sy, 25);
+            return (
+              <div key={ev.id} onClick={(e)=>{e.stopPropagation(); onEventClick(ev);}}
+                className="absolute z-10 border-2 border-black bg-gray-200 hover:bg-gray-300 cursor-pointer"
+                style={{left:'68px', right:'8px', top: (sy+1)+'px', height:(h-2)+'px'}}>
+                <div className="p-1.5 h-full overflow-hidden">
+                  <div className="font-bold text-sm truncate">{ev.title}</div>
+                  {h>35 && <div className="text-xs">{ev.time} - {ev.endTime}</div>}
+                </div>
+              </div>
+            )
+          })}
+          {dateStr===todayStr && (()=>{
+            const now = new Date(); const h=now.getHours(); const i=hours.indexOf(h);
+            if(i===-1) return null;
+            const y = i*60 + now.getMinutes();
+            return (<>
+              <div className="absolute z-30 border-t-2 border-black" style={{top:y+'px', left:'64px', right:0}}/>
+              <div className="absolute z-30 rounded-full bg-black" style={{top:(y-4)+'px', left:'56px', width:'8px', height:'8px'}}/>
+            </>);
+          })()}
+        </div>
+      </div>
+    )
+  }
+
+  function App(){
+    const [view, setView] = useState('day');
+    const [date, setDate] = useState(new Date());
+    const [events, setEvents] = useState([]);
+    const [formOpen, setFormOpen] = useState(false);
+    const [editing, setEditing] = useState(null);
+    const [form, setForm] = useState({title:'', date: (new Date()).toISOString().split('T')[0], time:'09:00', endTime:'10:00', notes:'', repeat:'none'});
+    const [timeSettings, setTimeSettings] = useState({ startHour: 7, endHour: 22 });
+    const [showTimeSettings, setShowTimeSettings] = useState(false);
+    const [loading, setLoading] = useState(false);
+
+    const ymd = (d)=> d.toISOString().split('T')[0];
+    const pad = (n)=> String(n).padStart(2,'0');
+    const toISO = (dateStr, timeStr)=> {
+      const [y,m,d] = dateStr.split('-').map(Number);
+      const [hh,mm] = timeStr.split(':').map(Number);
+      const dt = new Date(Date.UTC(y, m-1, d, hh, mm, 0));
+      return dt.toISOString();
+    };
+
+    const load = async()=>{
+      setLoading(true);
+      const start = new Date(); start.setDate(start.getDate()-45);
+      const end = new Date(); end.setDate(end.getDate()+90);
+      const q = new URLSearchParams({ start: start.toISOString(), end: end.toISOString() }).toString();
+      const resp = await fetch('/api/events?'+q);
+      if(resp.ok){
+        const arr = await resp.json();
+        const mapped = arr.map(e=>{
+          const s = new Date(e.start);
+          const ee = new Date(e.end);
+          return {
+            id: e.id, title: e.title||'', notes:e.notes||'',
+            date: s.toISOString().split('T')[0],
+            time: pad(s.getUTCHours())+':'+pad(s.getUTCMinutes()),
+            endTime: pad(ee.getUTCHours())+':'+pad(ee.getUTCMinutes()),
+            rrule: e.rrule || null
+          };
+        });
+        setEvents(mapped);
+      }
+      setLoading(false);
+    };
+    useEffect(()=>{ load(); },[]);
+
+    const navigate = (dir)=>{
+      const d = new Date(date);
+      if(view==='day'){ d.setDate(d.getDate()+dir); }
+      else if(view==='3day'){ d.setDate(d.getDate()+3*dir); }
+      else if(view==='week'){ d.setDate(d.getDate()+7*dir); }
+      else { d.setMonth(d.getMonth()+dir); }
+      setDate(d);
+    };
+
+    const openCreate = (dateStr, timeStr)=>{
+      setEditing(null);
+      setForm({ title:'', date:dateStr, time:timeStr, endTime:timeStr, notes:'', repeat:'none'});
+      setFormOpen(true);
+    };
+
+    const save = async()=>{
+      const payload = {
+        title: form.title,
+        notes: form.notes || '',
+        start: toISO(form.date, form.time),
+        end: toISO(form.date, form.endTime),
+        rrule: (form.repeat==='none') ? null : { freq: form.repeat.toUpperCase(), dtstart: toISO(form.date, form.time) }
+      };
+      if(editing){
+        const res = await fetch('/api/events/'+editing.id, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+        if(!res.ok) return alert('更新失败');
+      }else{
+        const res = await fetch('/api/events', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+        if(!res.ok) return alert('创建失败');
+      }
+      setFormOpen(false); setEditing(null);
+      await load();
+    };
+
+    const remove = async(onlyThis=false)=>{
+      if(!editing) return;
+      const url = onlyThis
+        ? `/api/events/${editing.id}?exdate=${encodeURIComponent(toISO(editing.date, editing.time))}`
+        : `/api/events/${editing.id}`;
+      const res = await fetch(url, {method:'DELETE'});
+      if(!res.ok) return alert('删除失败');
+      setFormOpen(false); setEditing(null);
+      await load();
+    };
+
+    return (
+      <div className="min-h-screen bg-white">
+        <div className="max-w-6xl mx-auto p-4">
+          <Header view={view} setView={setView} timeSettings={timeSettings}
+                  setShowTimeSettings={setShowTimeSettings} navigate={navigate}/>
+          {loading && <div className="text-sm text-gray-600 mb-2">加载中…</div>}
+          <TimeGridDay date={date} events={events} timeSettings={timeSettings}
+                      onBlankClick={(ds,ts)=> openCreate(ds,ts)}
+                      onEventClick={(ev)=>{ setEditing(ev); setForm({...ev, repeat: ev.rrule? ev.rrule.freq.toLowerCase():'none'}); setFormOpen(true); }}/>
+        </div>
+
+        {showTimeSettings && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white dialog p-6 max-w-md w-full">
+              <h3 className="text-xl font-bold mb-4">时间设置</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold mb-1">开始</label>
+                  <select className="w-full border-2 border-black p-2"
+                    value={timeSettings.startHour}
+                    onChange={e=> setTimeSettings(s=>({...s, startHour: parseInt(e.target.value)}))}>
+                    {Array.from({length:24}, (_,h)=> <option key={h} value={h}>{String(h).padStart(2,'0')}:00</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-1">结束</label>
+                  <select className="w-full border-2 border-black p-2"
+                    value={timeSettings.endHour}
+                    onChange={e=> setTimeSettings(s=>({...s, endHour: parseInt(e.target.value)}))}>
+                    {Array.from({length:24}, (_,h)=> <option key={h} value={h}>{String(h).padStart(2,'0')}:00</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button className="btn btn-ghost flex-1" onClick={()=> setShowTimeSettings(false)}>取消</button>
+                <button className="btn flex-1" onClick={()=> setShowTimeSettings(false)}>保存</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {formOpen && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white dialog p-6 max-w-md w-full">
+              <h3 className="text-xl font-bold mb-4">{editing? '编辑事件':'新事件'}</h3>
+              <div className="grid gap-3">
+                <label className="text-sm font-bold">标题
+                  <input className="w-full border-2 border-black p-2" value={form.title}
+                         onChange={e=> setForm({...form, title:e.target.value})} placeholder="事件标题"/>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-sm font-bold">日期
+                    <input type="date" className="w-full border-2 border-black p-2" value={form.date}
+                           onChange={e=> setForm({...form, date:e.target.value})}/>
+                  </label>
+                  <label className="text-sm font-bold">重复
+                    <select className="w-full border-2 border-black p-2" value={form.repeat}
+                            onChange={e=> setForm({...form, repeat:e.target.value})}>
+                      <option value="none">不重复</option>
+                      <option value="daily">每天</option>
+                      <option value="weekly">每周</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-sm font-bold">开始
+                    <input type="time" className="w-full border-2 border-black p-2" value={form.time}
+                           onChange={e=> setForm({...form, time:e.target.value})}/>
+                  </label>
+                  <label className="text-sm font-bold">结束
+                    <input type="time" className="w-full border-2 border-black p-2" value={form.endTime}
+                           onChange={e=> setForm({...form, endTime:e.target.value})}/>
+                  </label>
+                </div>
+                <label className="text-sm font-bold">备注
+                  <textarea className="w-full border-2 border-black p-2 h-20 resize-none" value={form.notes}
+                            onChange={e=> setForm({...form, notes:e.target.value})}/>
+                </label>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button className="btn btn-ghost flex-1"
+                  onClick={()=> { setFormOpen(false); setEditing(null); }}>
+                  取消
+                </button>
+                {editing && (
+                  <button className="btn flex-none" onClick={()=> remove(false)}>删除</button>
+                )}
+                {editing && editing.rrule && (
+                  <button className="btn flex-none" onClick={()=> remove(true)}>仅删这一次</button>
+                )}
+                <button className="btn flex-1" onClick={save} disabled={!form.title.trim()}>
+                  {editing? '保存':'创建'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('app')).render(<App/>);
+  </script>
+</body>
+</html>
