@@ -398,6 +398,68 @@
             border: 1px solid #A30262;
         }
 
+        /* Asexual Flag Colors */
+        .event.ace-black {
+            background: #000000;
+            color: #fff;
+            border: 1px solid #000;
+        }
+
+        .event.ace-gray {
+            background: #A3A3A3;
+            color: #000;
+            border: 1px solid #A3A3A3;
+        }
+
+        .event.ace-white {
+            background: #FFFFFF;
+            color: #000;
+            border: 2px solid #ccc;
+        }
+
+        .event.ace-purple {
+            background: #810081;
+            color: #fff;
+            border: 1px solid #810081;
+        }
+
+        /* Rainbow/Pride Flag Colors */
+        .event.rainbow-red {
+            background: #E40303;
+            color: #fff;
+            border: 1px solid #E40303;
+        }
+
+        .event.rainbow-orange {
+            background: #FFA52C;
+            color: #000;
+            border: 1px solid #FFA52C;
+        }
+
+        .event.rainbow-yellow {
+            background: #FFFF41;
+            color: #000;
+            border: 1px solid #FFFF41;
+        }
+
+        .event.rainbow-green {
+            background: #008018;
+            color: #fff;
+            border: 1px solid #008018;
+        }
+
+        .event.rainbow-blue {
+            background: #0000F9;
+            color: #fff;
+            border: 1px solid #0000F9;
+        }
+
+        .event.rainbow-purple {
+            background: #86007D;
+            color: #fff;
+            border: 1px solid #86007D;
+        }
+
         .event.selected {
             box-shadow: 0 0 0 2px #666;
         }
@@ -807,14 +869,19 @@
             </div>
             <div class="form-group">
                 <label>颜色标签</label>
-                <div class="color-label">跨性别旗帜 🏳️‍⚧️</div>
+                <div class="color-label">基础</div>
                 <div class="color-picker" id="colorPicker">
                     <div class="color-option selected" data-color="default" style="background: #000" title="默认黑色"></div>
+                </div>
+                
+                <div class="color-label" style="margin-top: 10px">跨性别旗帜 🏳️‍⚧️</div>
+                <div class="color-picker">
                     <div class="color-option" data-color="trans-blue" style="background: #5BCEFA" title="跨性别蓝"></div>
                     <div class="color-option" data-color="trans-pink" style="background: #F5A9B8" title="跨性别粉"></div>
                     <div class="color-option" data-color="trans-white" style="background: #FFFFFF" title="跨性别白"></div>
                 </div>
-                <div class="color-label" style="margin-top: 10px">女同性恋旗帜 🏳️‍🌈</div>
+                
+                <div class="color-label" style="margin-top: 10px">女同性恋旗帜 🧡</div>
                 <div class="color-picker">
                     <div class="color-option" data-color="lesbian-dark-orange" style="background: #D52D00" title="深橙"></div>
                     <div class="color-option" data-color="lesbian-orange" style="background: #EF7627" title="橙色"></div>
@@ -822,6 +889,24 @@
                     <div class="color-option" data-color="lesbian-pink" style="background: #D162A4" title="粉色"></div>
                     <div class="color-option" data-color="lesbian-dark-pink" style="background: #B55690" title="深粉"></div>
                     <div class="color-option" data-color="lesbian-purple" style="background: #A30262" title="紫色"></div>
+                </div>
+                
+                <div class="color-label" style="margin-top: 10px">无性恋旗帜 🖤</div>
+                <div class="color-picker">
+                    <div class="color-option" data-color="ace-black" style="background: #000000" title="黑色"></div>
+                    <div class="color-option" data-color="ace-gray" style="background: #A3A3A3" title="灰色"></div>
+                    <div class="color-option" data-color="ace-white" style="background: #FFFFFF" title="白色"></div>
+                    <div class="color-option" data-color="ace-purple" style="background: #810081" title="紫色"></div>
+                </div>
+                
+                <div class="color-label" style="margin-top: 10px">彩虹旗 🌈</div>
+                <div class="color-picker">
+                    <div class="color-option" data-color="rainbow-red" style="background: #E40303" title="红色"></div>
+                    <div class="color-option" data-color="rainbow-orange" style="background: #FFA52C" title="橙色"></div>
+                    <div class="color-option" data-color="rainbow-yellow" style="background: #FFFF41" title="黄色"></div>
+                    <div class="color-option" data-color="rainbow-green" style="background: #008018" title="绿色"></div>
+                    <div class="color-option" data-color="rainbow-blue" style="background: #0000F9" title="蓝色"></div>
+                    <div class="color-option" data-color="rainbow-purple" style="background: #86007D" title="紫色"></div>
                 </div>
             </div>
             <div class="form-group">
