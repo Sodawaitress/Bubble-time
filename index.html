@@ -244,43 +244,62 @@
         .time-grid {
             flex: 1;
             position: relative;
-            overflow-y: auto;
-            overflow-x: hidden;
+            overflow: auto;
             background: #fff;
+            display: flex;
+            flex-direction: column;
         }
 
         .time-header {
             display: flex;
             position: sticky;
             top: 0;
+            left: 0;
             background: #fff;
             border-bottom: 2px solid #000;
-            z-index: 100;
+            z-index: 101;
             height: 40px;
+            min-width: fit-content;
         }
 
         .time-header-cell {
-            flex: 1;
+            min-width: 100px;
+            width: 100px;
             padding: 10px;
             text-align: center;
             font-weight: 500;
             font-size: 13px;
             border-right: 1px solid #ccc;
+            flex-shrink: 0;
         }
 
         .time-header-cell:first-child {
             width: 60px;
-            flex: none;
+            min-width: 60px;
+            position: sticky;
+            left: 0;
+            background: #fff;
+            z-index: 102;
+            border-right: 2px solid #000;
         }
 
         .time-body {
             position: relative;
             display: flex;
+            flex: 1;
+            min-width: fit-content;
+            overflow: visible;
         }
 
         .time-column {
             width: 60px;
+            min-width: 60px;
             flex-shrink: 0;
+            position: sticky;
+            left: 0;
+            background: #fff;
+            z-index: 100;
+            border-right: 2px solid #000;
         }
 
         .time-slot {
@@ -290,6 +309,7 @@
             text-align: right;
             font-size: 11px;
             color: #666;
+            background: #fff;
         }
 
         .time-slot.hour {
@@ -301,12 +321,15 @@
             flex: 1;
             display: flex;
             position: relative;
+            min-width: fit-content;
         }
 
         .day-column {
-            flex: 1;
+            min-width: 100px;
+            width: 100px;
             position: relative;
             border-right: 1px solid #ccc;
+            flex-shrink: 0;
         }
 
         .day-column:last-child {
@@ -761,39 +784,211 @@
 
         /* Mobile optimization */
         @media (max-width: 768px) {
+            body {
+                font-size: 14px;
+            }
+
             .header {
-                flex-direction: column;
-                gap: 10px;
                 padding: 10px;
+                position: sticky;
+                top: 0;
+                z-index: 200;
+            }
+
+            .header-left {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .logo {
+                font-size: 20px;
             }
 
             .view-switcher {
-                flex-wrap: wrap;
+                display: flex;
+                gap: 2px;
+                overflow-x: auto;
+                max-width: 250px;
             }
 
+            .view-btn {
+                padding: 6px 10px;
+                font-size: 11px;
+                white-space: nowrap;
+            }
+
+            .header-right {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .date-navigator {
+                flex: 1;
+            }
+
+            .nav-btn {
+                padding: 5px 8px;
+                font-size: 12px;
+            }
+
+            .current-date {
+                font-size: 14px;
+                min-width: 120px;
+            }
+
+            .user-info {
+                display: none;
+            }
+
+            /* Mobile Menu Button */
+            .mobile-menu-btn {
+                display: block;
+                padding: 6px 10px;
+                background: #000;
+                color: #fff;
+                border: none;
+                font-size: 12px;
+            }
+
+            /* Time Grid Mobile */
+            .time-header-cell {
+                min-width: 80px;
+                width: 80px;
+                font-size: 11px;
+                padding: 8px 5px;
+            }
+
+            .time-header-cell:first-child {
+                width: 45px;
+                min-width: 45px;
+                font-size: 10px;
+            }
+
+            .time-column {
+                width: 45px;
+                min-width: 45px;
+            }
+
+            .time-slot {
+                font-size: 9px;
+                padding-right: 4px;
+            }
+
+            .day-column {
+                min-width: 80px;
+                width: 80px;
+            }
+
+            .event {
+                font-size: 10px;
+                padding: 2px 4px;
+            }
+
+            .event-title {
+                font-size: 10px;
+            }
+
+            .event-time {
+                display: none;
+            }
+
+            /* Dialog Mobile */
             .event-dialog {
                 width: 95%;
                 max-width: 95vw;
                 max-height: 85vh;
-                padding: 20px;
+                padding: 15px;
+                margin: 0;
             }
 
             .dialog-header {
-                top: -20px;
+                font-size: 16px;
+                top: -15px;
             }
 
             .dialog-buttons {
-                bottom: -20px;
+                bottom: -15px;
+                flex-direction: column;
             }
 
-            .time-header-cell:first-child,
-            .time-column {
-                width: 50px;
+            .dialog-buttons button {
+                width: 100%;
+                padding: 12px;
+            }
+
+            .color-section {
+                max-height: 200px;
             }
 
             .color-option {
-                width: 25px;
-                height: 25px;
+                width: 24px;
+                height: 24px;
+            }
+
+            /* Month View Mobile */
+            .month-grid {
+                font-size: 11px;
+            }
+
+            .month-day {
+                min-height: 60px;
+                padding: 3px;
+            }
+
+            .month-day-header {
+                font-size: 12px;
+            }
+
+            .month-event {
+                font-size: 9px;
+                padding: 1px 2px;
+            }
+
+            /* Settings Panel Mobile */
+            .settings-panel {
+                right: 10px;
+                top: 120px;
+                width: 200px;
+                padding: 15px;
+            }
+
+            /* Timetable Mobile */
+            .timetable-grid {
+                font-size: 10px;
+                overflow-x: auto;
+            }
+
+            .timetable-cell {
+                min-width: 60px;
+                padding: 5px;
+                min-height: 40px;
+            }
+
+            .timetable-event {
+                font-size: 9px;
+                padding: 3px;
+            }
+        }
+
+        /* Landscape mode for phones */
+        @media (max-width: 768px) and (orientation: landscape) {
+            .header {
+                padding: 5px 10px;
+            }
+
+            .event-dialog {
+                max-height: 95vh;
+            }
+
+            .color-section {
+                max-height: 150px;
+            }
+        }
+
+        /* Desktop mode - hide mobile menu button */
+        @media (min-width: 769px) {
+            .mobile-menu-btn {
+                display: none;
             }
         }
     </style>
@@ -828,7 +1023,7 @@
                     <button class="view-btn" onclick="switchView('3days')">3 Days</button>
                     <button class="view-btn" onclick="switchView('week')">Week</button>
                     <button class="view-btn" onclick="switchView('month')">Month</button>
-                    <button class="view-btn" onclick="switchView('timetable')">Timetable</button>
+                    <button class="view-btn" onclick="switchView('timetable')">Table</button>
                 </div>
             </div>
             <div class="header-right">
@@ -836,8 +1031,9 @@
                     <button class="nav-btn" onclick="navigateDate(-1)">◀</button>
                     <div class="current-date" id="currentDate">2025年1月</div>
                     <button class="nav-btn" onclick="navigateDate(1)">▶</button>
-                    <button class="nav-btn" onclick="goToToday()">Today</button>
+                    <button class="nav-btn" onclick="goToToday()">今天</button>
                 </div>
+                <button class="mobile-menu-btn" onclick="toggleMobileMenu()">菜单</button>
                 <div class="user-info">
                     <span class="sync-status" id="syncStatus">已同步</span>
                     <span id="currentUser">用户</span>
@@ -849,13 +1045,22 @@
 
         <!-- Settings Panel -->
         <div class="settings-panel" id="settingsPanel">
-            <h3>时间范围设置</h3>
-            <div class="time-range-inputs">
-                <input type="time" id="startTime" value="07:00" />
-                <span>-</span>
-                <input type="time" id="endTime" value="22:00" />
+            <h3>设置</h3>
+            <div class="form-group">
+                <label>时间范围</label>
+                <div class="time-range-inputs">
+                    <input type="time" id="startTime" value="07:00" />
+                    <span>-</span>
+                    <input type="time" id="endTime" value="22:00" />
+                </div>
             </div>
-            <button class="view-btn" onclick="applyTimeRange()">应用</button>
+            <button class="view-btn" onclick="applyTimeRange()" style="width: 100%; margin-top: 10px;">应用</button>
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ccc;">
+                <div style="font-size: 12px; color: #666; margin-bottom: 10px;">
+                    用户: <strong id="settingsUsername"></strong>
+                </div>
+                <button class="logout-btn" onclick="logout()" style="width: 100%;">登出</button>
+            </div>
         </div>
 
         <!-- Calendar Container -->
@@ -1251,13 +1456,20 @@
 
         function renderTimeHeader(days) {
             const header = document.getElementById('timeHeader');
-            header.innerHTML = '<div class="time-header-cell"></div>';
+            header.innerHTML = '<div class="time-header-cell">时间</div>';
             
-            const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+            const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+            const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+            
             days.forEach(day => {
                 const cell = document.createElement('div');
                 cell.className = 'time-header-cell';
-                cell.textContent = `${day.getMonth() + 1}/${day.getDate()} ${dayNames[day.getDay()]}`;
+                const isMobile = window.innerWidth <= 768;
+                if (isMobile) {
+                    cell.textContent = `${day.getDate()} 周${dayNames[day.getDay()]}`;
+                } else {
+                    cell.textContent = `${day.getMonth() + 1}/${day.getDate()} 周${dayNames[day.getDay()]}`;
+                }
                 header.appendChild(cell);
             });
         }
@@ -1819,6 +2031,17 @@
         function toggleSettings() {
             const panel = document.getElementById('settingsPanel');
             panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+            if (panel.style.display === 'block') {
+                document.getElementById('settingsUsername').textContent = currentUser;
+            }
+        }
+
+        function toggleMobileMenu() {
+            const panel = document.getElementById('settingsPanel');
+            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+            if (panel.style.display === 'block') {
+                document.getElementById('settingsUsername').textContent = currentUser;
+            }
         }
 
         document.addEventListener('click', (e) => {
