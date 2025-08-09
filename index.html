@@ -1,31 +1,1524 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pride Calendar</title>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="theme-color" content="#000000">
+    <title>Calendar Planner - Cloud</title>
     <style>
-      /* Minimal UI */
-      :root{ --bg:#faf9f7; --line:#e6e3df; --text:#222; --muted:#777; }
-      html,body,#root{ height:100%; }
-      body{ margin:0; background:var(--bg); color:var(--text); font:14px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial; }
-      header{ display:flex; gap:8px; align-items:center; padding:10px 12px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:5;}
-      button,select,input{ border:1px solid var(--line); background:#fff; padding:6px 10px; border-radius:8px; }
-      .spacer{ flex:1; }
-      .drawer{ position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line); padding:12px; border-radius:14px 14px 0 0; box-shadow:0 -6px 16px rgba(0,0,0,.08); }
-      .row{ display:flex; gap:8px; margin:8px 0;}
-      .label{ width:84px; color:var(--muted); }
-      .grid{ display:grid; grid-template-columns: repeat(auto-fit,minmax(120px,1fr)); gap:8px; }
-      .pill{ padding:6px 10px; border:1px solid var(--line); border-radius:999px; display:inline-flex; gap:6px; align-items:center; cursor:pointer; }
-      .timetable{ padding:12px; }
-      .fc .fc-toolbar-title{ font-weight:600; }
-      .fc .fc-timegrid-slot{ height: 20px; } /* compact slots */
-      .fc .fc-col-header-cell-cushion{ padding:6px 4px; }
-      .flag-swatch{ width:14px; height:14px; border-radius:3px; display:inline-block; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #ffffff;
+            color: #000000;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Loading Indicator */
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+            background: #fff;
+            padding: 20px;
+            border: 2px solid #000;
+            display: none;
+            z-index: 3000;
+        }
+
+        /* Login Screen */
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #ffffff;
+        }
+
+        .login-box {
+            width: 320px;
+            padding: 40px;
+            border: 2px solid #000;
+            background: #fff;
+        }
+
+        .login-box h2 {
+            margin-bottom: 30px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .login-box input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #000;
+            background: #fff;
+            font-size: 14px;
+        }
+
+        .login-box button {
+            width: 100%;
+            padding: 12px;
+            background: #000;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
+
+        .login-box button:hover {
+            opacity: 0.8;
+        }
+
+        .login-error {
+            color: #000;
+            font-size: 12px;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .login-info {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #ccc;
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+        }
+
+        /* Main App */
+        .app-container {
+            display: none;
+            height: 100vh;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 2px solid #000;
+            background: #fff;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .view-switcher {
+            display: flex;
+            gap: 5px;
+        }
+
+        .view-btn {
+            padding: 8px 16px;
+            background: #fff;
+            border: 1px solid #000;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .view-btn.active {
+            background: #000;
+            color: #fff;
+        }
+
+        .view-btn:hover:not(.active) {
+            background: #f0f0f0;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .date-navigator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-btn {
+            padding: 6px 12px;
+            background: #fff;
+            border: 1px solid #000;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .nav-btn:hover {
+            background: #f0f0f0;
+        }
+
+        .current-date {
+            font-size: 16px;
+            font-weight: 500;
+            min-width: 150px;
+            text-align: center;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-left: 20px;
+            border-left: 1px solid #000;
+        }
+
+        .logout-btn {
+            padding: 6px 12px;
+            background: #000;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .sync-status {
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* Settings Panel */
+        .settings-panel {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            width: 250px;
+            background: #fff;
+            border: 2px solid #000;
+            padding: 20px;
+            display: none;
+            z-index: 1000;
+        }
+
+        .settings-panel h3 {
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .time-range-inputs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .time-range-inputs input {
+            flex: 1;
+            padding: 5px;
+            border: 1px solid #000;
+        }
+
+        /* Calendar Container */
+        .calendar-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Time Grid */
+        .time-grid {
+            flex: 1;
+            position: relative;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: #fff;
+        }
+
+        .time-header {
+            display: flex;
+            position: sticky;
+            top: 0;
+            background: #fff;
+            border-bottom: 2px solid #000;
+            z-index: 100;
+            height: 40px;
+        }
+
+        .time-header-cell {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            font-weight: 500;
+            font-size: 13px;
+            border-right: 1px solid #ccc;
+        }
+
+        .time-header-cell:first-child {
+            width: 60px;
+            flex: none;
+        }
+
+        .time-body {
+            position: relative;
+            display: flex;
+        }
+
+        .time-column {
+            width: 60px;
+            flex-shrink: 0;
+        }
+
+        .time-slot {
+            height: 12px;
+            border-bottom: 1px solid #f0f0f0;
+            padding-right: 8px;
+            text-align: right;
+            font-size: 11px;
+            color: #666;
+        }
+
+        .time-slot.hour {
+            border-bottom: 1px solid #ccc;
+            color: #000;
+        }
+
+        .day-columns {
+            flex: 1;
+            display: flex;
+            position: relative;
+        }
+
+        .day-column {
+            flex: 1;
+            position: relative;
+            border-right: 1px solid #ccc;
+        }
+
+        .day-column:last-child {
+            border-right: none;
+        }
+
+        .grid-cell {
+            height: 12px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+        }
+
+        .grid-cell.hour {
+            border-bottom: 1px solid #ccc;
+        }
+
+        .grid-cell:hover {
+            background: #f9f9f9;
+        }
+
+        /* Events */
+        .event {
+            position: absolute;
+            left: 2px;
+            right: 2px;
+            background: #000;
+            color: #fff;
+            padding: 4px 6px;
+            font-size: 12px;
+            cursor: move;
+            overflow: hidden;
+            border: 1px solid #000;
+            z-index: 10;
+            user-select: none;
+        }
+
+        .event.selected {
+            box-shadow: 0 0 0 2px #666;
+        }
+
+        .event-title {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .event-time {
+            font-size: 10px;
+            opacity: 0.8;
+        }
+
+        .event.dragging {
+            opacity: 0.5;
+            z-index: 1000;
+        }
+
+        .event-resize-handle {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            cursor: ns-resize;
+        }
+
+        /* Event Creation */
+        .event-creator {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.1);
+            border: 2px dashed #000;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        /* Event Dialog */
+        .event-dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            background: #fff;
+            border: 2px solid #000;
+            padding: 25px;
+            z-index: 2000;
+            display: none;
+        }
+
+        .dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 1999;
+            display: none;
+        }
+
+        .dialog-header {
+            margin-bottom: 20px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .dialog-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .form-group label {
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 8px;
+            border: 1px solid #000;
+            background: #fff;
+            font-size: 14px;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .dialog-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .dialog-buttons button {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #000;
+            background: #fff;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .dialog-buttons button.primary {
+            background: #000;
+            color: #fff;
+        }
+
+        .dialog-buttons button:hover {
+            opacity: 0.8;
+        }
+
+        .delete-btn {
+            background: #fff;
+            color: #000;
+            border: 1px solid #000;
+        }
+
+        .delete-btn:hover {
+            background: #f0f0f0;
+        }
+
+        /* Timetable View */
+        .timetable-view {
+            display: none;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .timetable-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .timetable-grid {
+            display: grid;
+            grid-template-columns: 80px repeat(7, 1fr);
+            gap: 0;
+            border: 2px solid #000;
+            background: #fff;
+        }
+
+        .timetable-cell {
+            border: 1px solid #ccc;
+            padding: 10px;
+            min-height: 60px;
+        }
+
+        .timetable-cell.header {
+            background: #000;
+            color: #fff;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        .timetable-cell.time-label {
+            background: #f9f9f9;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        .timetable-event {
+            background: #000;
+            color: #fff;
+            padding: 5px;
+            margin: 2px 0;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        /* Month View */
+        .month-view {
+            display: none;
+            padding: 20px;
+            height: 100%;
+        }
+
+        .month-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 0;
+            height: calc(100% - 40px);
+            border: 2px solid #000;
+        }
+
+        .month-day {
+            border: 1px solid #ccc;
+            padding: 5px;
+            min-height: 100px;
+            background: #fff;
+            overflow-y: auto;
+        }
+
+        .month-day-header {
+            font-weight: 500;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .month-day.other-month {
+            background: #f9f9f9;
+        }
+
+        .month-day.today {
+            background: #f0f0f0;
+        }
+
+        .month-event {
+            background: #000;
+            color: #fff;
+            padding: 2px 4px;
+            margin: 2px 0;
+            font-size: 11px;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 10px;
+                padding: 10px;
+            }
+
+            .view-switcher {
+                flex-wrap: wrap;
+            }
+
+            .event-dialog {
+                width: 90%;
+                max-width: 400px;
+            }
+
+            .time-header-cell:first-child,
+            .time-column {
+                width: 50px;
+            }
+        }
     </style>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+</head>
+<body>
+    <!-- Loading Indicator -->
+    <div class="loading" id="loadingIndicator">正在同步数据...</div>
+
+    <!-- Login Screen -->
+    <div class="login-container" id="loginScreen">
+        <div class="login-box">
+            <h2>Calendar Planner</h2>
+            <input type="text" id="username" placeholder="用户名" />
+            <input type="password" id="password" placeholder="密码" />
+            <button onclick="login()">登录</button>
+            <div class="login-error" id="loginError"></div>
+            <div class="login-info">
+                首次登录将自动创建账号<br>
+                数据将保存在云端
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div class="app-container" id="appContainer">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <div class="logo">📅</div>
+                <div class="view-switcher">
+                    <button class="view-btn active" onclick="switchView('day')">Day</button>
+                    <button class="view-btn" onclick="switchView('3days')">3 Days</button>
+                    <button class="view-btn" onclick="switchView('week')">Week</button>
+                    <button class="view-btn" onclick="switchView('month')">Month</button>
+                    <button class="view-btn" onclick="switchView('timetable')">Timetable</button>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="date-navigator">
+                    <button class="nav-btn" onclick="navigateDate(-1)">◀</button>
+                    <div class="current-date" id="currentDate">2025年1月</div>
+                    <button class="nav-btn" onclick="navigateDate(1)">▶</button>
+                    <button class="nav-btn" onclick="goToToday()">Today</button>
+                </div>
+                <div class="user-info">
+                    <span class="sync-status" id="syncStatus">已同步</span>
+                    <span id="currentUser">用户</span>
+                    <button class="nav-btn" onclick="toggleSettings()">⚙️</button>
+                    <button class="logout-btn" onclick="logout()">登出</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="settings-panel" id="settingsPanel">
+            <h3>时间范围设置</h3>
+            <div class="time-range-inputs">
+                <input type="time" id="startTime" value="07:00" />
+                <span>-</span>
+                <input type="time" id="endTime" value="22:00" />
+            </div>
+            <button class="view-btn" onclick="applyTimeRange()">应用</button>
+        </div>
+
+        <!-- Calendar Container -->
+        <div class="calendar-container">
+            <!-- Time Grid View -->
+            <div class="time-grid" id="timeGrid">
+                <div class="time-header" id="timeHeader"></div>
+                <div class="time-body" id="timeBody"></div>
+            </div>
+
+            <!-- Month View -->
+            <div class="month-view" id="monthView">
+                <div class="month-grid" id="monthGrid"></div>
+            </div>
+
+            <!-- Timetable View -->
+            <div class="timetable-view" id="timetableView">
+                <div class="timetable-header">
+                    <h2>课程表视图</h2>
+                    <button class="view-btn" onclick="generateTimetable()">刷新</button>
+                </div>
+                <div class="timetable-grid" id="timetableGrid"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Event Dialog -->
+    <div class="dialog-overlay" id="dialogOverlay" onclick="closeEventDialog()"></div>
+    <div class="event-dialog" id="eventDialog">
+        <div class="dialog-header" id="dialogTitle">新建事件</div>
+        <div class="dialog-form">
+            <div class="form-group">
+                <label>标题</label>
+                <input type="text" id="eventTitle" placeholder="事件标题" />
+            </div>
+            <div class="form-group">
+                <label>日期</label>
+                <input type="date" id="eventDate" />
+            </div>
+            <div class="form-group">
+                <label>开始时间</label>
+                <input type="time" id="eventStartTime" step="300" />
+            </div>
+            <div class="form-group">
+                <label>结束时间</label>
+                <input type="time" id="eventEndTime" step="300" />
+            </div>
+            <div class="form-group">
+                <label>重复</label>
+                <select id="eventRepeat">
+                    <option value="none">不重复</option>
+                    <option value="daily">每天</option>
+                    <option value="weekly">每周</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>描述</label>
+                <textarea id="eventDescription" placeholder="事件描述（可选）"></textarea>
+            </div>
+        </div>
+        <div class="dialog-buttons">
+            <button onclick="closeEventDialog()">取消</button>
+            <button class="delete-btn" id="deleteEventBtn" onclick="deleteEvent()" style="display:none;">删除</button>
+            <button class="primary" onclick="saveEvent()">保存</button>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        let currentUser = null;
+        let currentView = 'day';
+        let currentDate = new Date();
+        let events = [];
+        let selectedEvent = null;
+        let isCreatingEvent = false;
+        let createStartCell = null;
+        let createEndCell = null;
+        let timeRange = { start: '07:00', end: '22:00' };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuth();
+        });
+
+        // Show/Hide Loading
+        function showLoading() {
+            document.getElementById('loadingIndicator').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingIndicator').style.display = 'none';
+        }
+
+        function updateSyncStatus(status) {
+            document.getElementById('syncStatus').textContent = status;
+        }
+
+        // Auth Functions with Cloud API
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (!username || !password) {
+                document.getElementById('loginError').textContent = '请输入用户名和密码';
+                return;
+            }
+
+            showLoading();
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentUser = username;
+                    localStorage.setItem('currentUser', username);
+                    
+                    document.getElementById('loginScreen').style.display = 'none';
+                    document.getElementById('appContainer').style.display = 'flex';
+                    document.getElementById('currentUser').textContent = username;
+                    
+                    if (data.newUser) {
+                        alert('新用户注册成功！数据将保存在云端。');
+                    }
+                    
+                    await loadEvents();
+                    await loadTimeRange();
+                    initCalendar();
+                } else {
+                    document.getElementById('loginError').textContent = data.error || '登录失败';
+                }
+            } catch (error) {
+                document.getElementById('loginError').textContent = '网络错误，请稍后重试';
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('currentUser');
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('appContainer').style.display = 'none';
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+        }
+
+        async function checkAuth() {
+            const savedUser = localStorage.getItem('currentUser');
+            if (savedUser) {
+                currentUser = savedUser;
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('appContainer').style.display = 'flex';
+                document.getElementById('currentUser').textContent = savedUser;
+                await loadEvents();
+                await loadTimeRange();
+                initCalendar();
+            }
+        }
+
+        // Cloud Storage Functions
+        async function saveEvents() {
+            if (!currentUser) return;
+
+            updateSyncStatus('同步中...');
+
+            try {
+                const response = await fetch(`/api/events/${currentUser}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(events)
+                });
+
+                if (response.ok) {
+                    updateSyncStatus('已同步');
+                } else {
+                    throw new Error('Save failed');
+                }
+            } catch (error) {
+                console.error('Failed to save events:', error);
+                updateSyncStatus('同步失败');
+                // Fallback to localStorage
+                localStorage.setItem(`events_${currentUser}`, JSON.stringify(events));
+            }
+        }
+
+        async function loadEvents() {
+            if (!currentUser) return;
+
+            showLoading();
+
+            try {
+                const response = await fetch(`/api/events/${currentUser}`);
+                if (response.ok) {
+                    events = await response.json();
+                    updateSyncStatus('已同步');
+                } else {
+                    throw new Error('Load failed');
+                }
+            } catch (error) {
+                console.error('Failed to load events:', error);
+                updateSyncStatus('离线模式');
+                // Fallback to localStorage
+                const saved = localStorage.getItem(`events_${currentUser}`);
+                events = saved ? JSON.parse(saved) : [];
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function loadTimeRange() {
+            if (!currentUser) return;
+
+            try {
+                const response = await fetch(`/api/settings/${currentUser}`);
+                if (response.ok) {
+                    const settings = await response.json();
+                    timeRange = settings.timeRange || { start: '07:00', end: '22:00' };
+                    document.getElementById('startTime').value = timeRange.start;
+                    document.getElementById('endTime').value = timeRange.end;
+                }
+            } catch (error) {
+                console.error('Failed to load settings:', error);
+                // Fallback to localStorage
+                const saved = localStorage.getItem(`timeRange_${currentUser}`);
+                if (saved) {
+                    timeRange = JSON.parse(saved);
+                    document.getElementById('startTime').value = timeRange.start;
+                    document.getElementById('endTime').value = timeRange.end;
+                }
+            }
+        }
+
+        async function applyTimeRange() {
+            timeRange.start = document.getElementById('startTime').value;
+            timeRange.end = document.getElementById('endTime').value;
+            
+            if (!currentUser) return;
+
+            try {
+                await fetch(`/api/settings/${currentUser}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ timeRange })
+                });
+            } catch (error) {
+                console.error('Failed to save settings:', error);
+                // Fallback to localStorage
+                localStorage.setItem(`timeRange_${currentUser}`, JSON.stringify(timeRange));
+            }
+            
+            renderCalendar();
+            toggleSettings();
+        }
+
+        // Calendar Functions (保持原有的所有日历功能代码)
+        function initCalendar() {
+            updateDateDisplay();
+            renderCalendar();
+        }
+
+        function switchView(view) {
+            currentView = view;
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            document.getElementById('timeGrid').style.display = 'none';
+            document.getElementById('monthView').style.display = 'none';
+            document.getElementById('timetableView').style.display = 'none';
+            
+            if (view === 'month') {
+                document.getElementById('monthView').style.display = 'block';
+                renderMonthView();
+            } else if (view === 'timetable') {
+                document.getElementById('timetableView').style.display = 'block';
+                generateTimetable();
+            } else {
+                document.getElementById('timeGrid').style.display = 'block';
+                renderCalendar();
+            }
+            
+            updateDateDisplay();
+        }
+
+        function renderCalendar() {
+            const days = getDaysToShow();
+            renderTimeHeader(days);
+            renderTimeBody(days);
+            renderEvents(days);
+        }
+
+        function getDaysToShow() {
+            const days = [];
+            const startDate = new Date(currentDate);
+            
+            if (currentView === 'day') {
+                days.push(new Date(startDate));
+            } else if (currentView === '3days') {
+                for (let i = 0; i < 3; i++) {
+                    const day = new Date(startDate);
+                    day.setDate(startDate.getDate() + i);
+                    days.push(day);
+                }
+            } else if (currentView === 'week') {
+                const dayOfWeek = startDate.getDay();
+                startDate.setDate(startDate.getDate() - dayOfWeek);
+                for (let i = 0; i < 7; i++) {
+                    const day = new Date(startDate);
+                    day.setDate(startDate.getDate() + i);
+                    days.push(day);
+                }
+            }
+            
+            return days;
+        }
+
+        function renderTimeHeader(days) {
+            const header = document.getElementById('timeHeader');
+            header.innerHTML = '<div class="time-header-cell"></div>';
+            
+            const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+            days.forEach(day => {
+                const cell = document.createElement('div');
+                cell.className = 'time-header-cell';
+                cell.textContent = `${day.getMonth() + 1}/${day.getDate()} ${dayNames[day.getDay()]}`;
+                header.appendChild(cell);
+            });
+        }
+
+        function renderTimeBody(days) {
+            const body = document.getElementById('timeBody');
+            body.innerHTML = '';
+            
+            const timeColumn = document.createElement('div');
+            timeColumn.className = 'time-column';
+            
+            const [startHour, startMin] = timeRange.start.split(':').map(Number);
+            const [endHour, endMin] = timeRange.end.split(':').map(Number);
+            const totalMinutes = (endHour - startHour) * 60 + (endMin - startMin);
+            const slots = Math.ceil(totalMinutes / 5);
+            
+            for (let i = 0; i <= slots; i++) {
+                const totalMin = startHour * 60 + startMin + (i * 5);
+                const hour = Math.floor(totalMin / 60);
+                const min = totalMin % 60;
+                
+                const slot = document.createElement('div');
+                slot.className = 'time-slot';
+                if (min === 0) {
+                    slot.className += ' hour';
+                    slot.textContent = `${hour}:00`;
+                }
+                timeColumn.appendChild(slot);
+            }
+            body.appendChild(timeColumn);
+            
+            const dayColumns = document.createElement('div');
+            dayColumns.className = 'day-columns';
+            
+            days.forEach((day, dayIndex) => {
+                const dayColumn = document.createElement('div');
+                dayColumn.className = 'day-column';
+                dayColumn.dataset.date = formatDate(day);
+                dayColumn.dataset.dayIndex = dayIndex;
+                
+                for (let i = 0; i <= slots; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    if (i % 12 === 0) cell.className += ' hour';
+                    cell.dataset.slotIndex = i;
+                    cell.dataset.dayIndex = dayIndex;
+                    cell.dataset.date = formatDate(day);
+                    
+                    cell.addEventListener('mousedown', startCreateEvent);
+                    cell.addEventListener('mouseenter', updateCreateEvent);
+                    cell.addEventListener('mouseup', endCreateEvent);
+                    
+                    dayColumn.appendChild(cell);
+                }
+                dayColumns.appendChild(dayColumn);
+            });
+            
+            body.appendChild(dayColumns);
+        }
+
+        function renderEvents(days) {
+            document.querySelectorAll('.event').forEach(e => e.remove());
+            
+            const dayColumns = document.querySelectorAll('.day-column');
+            const [startHour, startMin] = timeRange.start.split(':').map(Number);
+            
+            days.forEach((day, dayIndex) => {
+                const dayEvents = getEventsForDay(day);
+                const column = dayColumns[dayIndex];
+                
+                dayEvents.forEach(event => {
+                    const eventEl = createEventElement(event, column, startHour, startMin);
+                    if (eventEl) column.appendChild(eventEl);
+                });
+            });
+        }
+
+        function createEventElement(event, column, startHour, startMin) {
+            const eventEl = document.createElement('div');
+            eventEl.className = 'event';
+            eventEl.dataset.eventId = event.id;
+            
+            const [eventStartHour, eventStartMin] = event.startTime.split(':').map(Number);
+            const [eventEndHour, eventEndMin] = event.endTime.split(':').map(Number);
+            
+            const startMinutes = (eventStartHour - startHour) * 60 + (eventStartMin - startMin);
+            const duration = (eventEndHour - eventStartHour) * 60 + (eventEndMin - eventStartMin);
+            
+            const top = (startMinutes / 5) * 12;
+            const height = (duration / 5) * 12;
+            
+            eventEl.style.top = `${top}px`;
+            eventEl.style.height = `${height}px`;
+            
+            eventEl.innerHTML = `
+                <div class="event-title">${event.title}</div>
+                ${height > 30 ? `<div class="event-time">${event.startTime} - ${event.endTime}</div>` : ''}
+                <div class="event-resize-handle"></div>
+            `;
+            
+            eventEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openEventDialog(event);
+            });
+            
+            let isDragging = false;
+            let isResizing = false;
+            let dragStartY = 0;
+            let originalTop = 0;
+            let originalHeight = 0;
+            
+            eventEl.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                if (e.target.classList.contains('event-resize-handle')) {
+                    isResizing = true;
+                    originalHeight = eventEl.offsetHeight;
+                } else {
+                    isDragging = true;
+                    originalTop = eventEl.offsetTop;
+                }
+                dragStartY = e.clientY;
+                eventEl.classList.add('dragging');
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const deltaY = e.clientY - dragStartY;
+                    const newTop = originalTop + deltaY;
+                    const snappedTop = Math.round(newTop / 12) * 12;
+                    eventEl.style.top = `${Math.max(0, snappedTop)}px`;
+                } else if (isResizing) {
+                    const deltaY = e.clientY - dragStartY;
+                    const newHeight = originalHeight + deltaY;
+                    const snappedHeight = Math.round(newHeight / 12) * 12;
+                    eventEl.style.height = `${Math.max(12, snappedHeight)}px`;
+                }
+            });
+            
+            document.addEventListener('mouseup', async (e) => {
+                if (isDragging || isResizing) {
+                    eventEl.classList.remove('dragging');
+                    
+                    if (isDragging || isResizing) {
+                        const newTop = parseInt(eventEl.style.top);
+                        const newHeight = parseInt(eventEl.style.height);
+                        
+                        const newStartMinutes = (newTop / 12) * 5;
+                        const newDuration = (newHeight / 12) * 5;
+                        
+                        const totalStartMin = startHour * 60 + startMin + newStartMinutes;
+                        const newStartHour = Math.floor(totalStartMin / 60);
+                        const newStartMin = totalStartMin % 60;
+                        
+                        const totalEndMin = totalStartMin + newDuration;
+                        const newEndHour = Math.floor(totalEndMin / 60);
+                        const newEndMin = totalEndMin % 60;
+                        
+                        event.startTime = `${String(newStartHour).padStart(2, '0')}:${String(newStartMin).padStart(2, '0')}`;
+                        event.endTime = `${String(newEndHour).padStart(2, '0')}:${String(newEndMin).padStart(2, '0')}`;
+                        
+                        await saveEvents();
+                        renderCalendar();
+                    }
+                    
+                    isDragging = false;
+                    isResizing = false;
+                }
+            });
+            
+            return eventEl;
+        }
+
+        // Event Creation by Dragging
+        function startCreateEvent(e) {
+            if (e.target.classList.contains('event')) return;
+            
+            isCreatingEvent = true;
+            createStartCell = e.target;
+            createEndCell = e.target;
+            
+            const creator = document.createElement('div');
+            creator.className = 'event-creator';
+            creator.id = 'eventCreator';
+            document.body.appendChild(creator);
+        }
+
+        function updateCreateEvent(e) {
+            if (!isCreatingEvent) return;
+            
+            createEndCell = e.target;
+            updateCreatorVisual();
+        }
+
+        function endCreateEvent(e) {
+            if (!isCreatingEvent) return;
+            
+            isCreatingEvent = false;
+            const creator = document.getElementById('eventCreator');
+            if (creator) creator.remove();
+            
+            if (createStartCell && createEndCell) {
+                const startSlot = parseInt(createStartCell.dataset.slotIndex);
+                const endSlot = parseInt(createEndCell.dataset.slotIndex);
+                const date = createStartCell.dataset.date;
+                
+                if (startSlot !== endSlot) {
+                    const minSlot = Math.min(startSlot, endSlot);
+                    const maxSlot = Math.max(startSlot, endSlot);
+                    
+                    const [startHour, startMin] = timeRange.start.split(':').map(Number);
+                    const startTotalMin = startHour * 60 + startMin + (minSlot * 5);
+                    const endTotalMin = startHour * 60 + startMin + ((maxSlot + 1) * 5);
+                    
+                    const eventStartHour = Math.floor(startTotalMin / 60);
+                    const eventStartMin = startTotalMin % 60;
+                    const eventEndHour = Math.floor(endTotalMin / 60);
+                    const eventEndMin = endTotalMin % 60;
+                    
+                    openEventDialog(null, {
+                        date: date,
+                        startTime: `${String(eventStartHour).padStart(2, '0')}:${String(eventStartMin).padStart(2, '0')}`,
+                        endTime: `${String(eventEndHour).padStart(2, '0')}:${String(eventEndMin).padStart(2, '0')}`
+                    });
+                }
+            }
+            
+            createStartCell = null;
+            createEndCell = null;
+        }
+
+        function updateCreatorVisual() {
+            const creator = document.getElementById('eventCreator');
+            if (!creator || !createStartCell || !createEndCell) return;
+            
+            const startRect = createStartCell.getBoundingClientRect();
+            const endRect = createEndCell.getBoundingClientRect();
+            
+            const top = Math.min(startRect.top, endRect.top);
+            const bottom = Math.max(startRect.bottom, endRect.bottom);
+            
+            creator.style.left = `${startRect.left}px`;
+            creator.style.top = `${top}px`;
+            creator.style.width = `${startRect.width}px`;
+            creator.style.height = `${bottom - top}px`;
+        }
+
+        // Month View
+        function renderMonthView() {
+            const grid = document.getElementById('monthGrid');
+            grid.innerHTML = '';
+            
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const startDate = new Date(firstDay);
+            startDate.setDate(startDate.getDate() - firstDay.getDay());
+            
+            const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+            
+            dayNames.forEach(name => {
+                const header = document.createElement('div');
+                header.className = 'month-day header';
+                header.textContent = name;
+                grid.appendChild(header);
+            });
+            
+            for (let i = 0; i < 42; i++) {
+                const day = new Date(startDate);
+                day.setDate(startDate.getDate() + i);
+                
+                const dayEl = document.createElement('div');
+                dayEl.className = 'month-day';
+                
+                if (day.getMonth() !== month) {
+                    dayEl.classList.add('other-month');
+                }
+                
+                if (isToday(day)) {
+                    dayEl.classList.add('today');
+                }
+                
+                const header = document.createElement('div');
+                header.className = 'month-day-header';
+                header.textContent = day.getDate();
+                dayEl.appendChild(header);
+                
+                const dayEvents = getEventsForDay(day);
+                dayEvents.forEach(event => {
+                    const eventEl = document.createElement('div');
+                    eventEl.className = 'month-event';
+                    eventEl.textContent = `${event.startTime} ${event.title}`;
+                    eventEl.onclick = () => openEventDialog(event);
+                    dayEl.appendChild(eventEl);
+                });
+                
+                dayEl.onclick = (e) => {
+                    if (e.target === dayEl || e.target.classList.contains('month-day-header')) {
+                        openEventDialog(null, { date: formatDate(day) });
+                    }
+                };
+                
+                grid.appendChild(dayEl);
+            }
+        }
+
+        // Timetable View
+        function generateTimetable() {
+            const grid = document.getElementById('timetableGrid');
+            grid.innerHTML = '';
+            
+            const dayNames = ['时间', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+            
+            dayNames.forEach(name => {
+                const header = document.createElement('div');
+                header.className = 'timetable-cell header';
+                header.textContent = name;
+                grid.appendChild(header);
+            });
+            
+            const timeSlots = new Set();
+            events.forEach(event => {
+                if (event.repeat !== 'none') {
+                    timeSlots.add(`${event.startTime}-${event.endTime}`);
+                }
+            });
+            
+            const sortedSlots = Array.from(timeSlots).sort();
+            
+            sortedSlots.forEach(slot => {
+                const [start, end] = slot.split('-');
+                
+                const timeLabel = document.createElement('div');
+                timeLabel.className = 'timetable-cell time-label';
+                timeLabel.textContent = `${start} - ${end}`;
+                grid.appendChild(timeLabel);
+                
+                for (let day = 1; day <= 7; day++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'timetable-cell';
+                    
+                    const dayEvents = events.filter(e => {
+                        if (e.repeat === 'daily') return true;
+                        if (e.repeat === 'weekly') {
+                            const eventDay = new Date(e.date).getDay();
+                            return eventDay === (day % 7);
+                        }
+                        return false;
+                    }).filter(e => e.startTime === start && e.endTime === end);
+                    
+                    dayEvents.forEach(event => {
+                        const eventEl = document.createElement('div');
+                        eventEl.className = 'timetable-event';
+                        eventEl.textContent = event.title;
+                        eventEl.onclick = () => openEventDialog(event);
+                        cell.appendChild(eventEl);
+                    });
+                    
+                    grid.appendChild(cell);
+                }
+            });
+        }
+
+        // Event Management
+        function openEventDialog(event = null, defaults = {}) {
+            selectedEvent = event;
+            const dialog = document.getElementById('eventDialog');
+            const overlay = document.getElementById('dialogOverlay');
+            
+            if (event) {
+                document.getElementById('dialogTitle').textContent = '编辑事件';
+                document.getElementById('eventTitle').value = event.title;
+                document.getElementById('eventDate').value = event.date;
+                document.getElementById('eventStartTime').value = event.startTime;
+                document.getElementById('eventEndTime').value = event.endTime;
+                document.getElementById('eventRepeat').value = event.repeat || 'none';
+                document.getElementById('eventDescription').value = event.description || '';
+                document.getElementById('deleteEventBtn').style.display = 'inline-block';
+            } else {
+                document.getElementById('dialogTitle').textContent = '新建事件';
+                document.getElementById('eventTitle').value = '';
+                document.getElementById('eventDate').value = defaults.date || formatDate(currentDate);
+                document.getElementById('eventStartTime').value = defaults.startTime || '09:00';
+                document.getElementById('eventEndTime').value = defaults.endTime || '10:00';
+                document.getElementById('eventRepeat').value = 'none';
+                document.getElementById('eventDescription').value = '';
+                document.getElementById('deleteEventBtn').style.display = 'none';
+            }
+            
+            dialog.style.display = 'block';
+            overlay.style.display = 'block';
+        }
+
+        function closeEventDialog() {
+            document.getElementById('eventDialog').style.display = 'none';
+            document.getElementById('dialogOverlay').style.display = 'none';
+            selectedEvent = null;
+        }
+
+        async function saveEvent() {
+            const title = document.getElementById('eventTitle').value;
+            const date = document.getElementById('eventDate').value;
+            const startTime = document.getElementById('eventStartTime').value;
+            const endTime = document.getElementById('eventEndTime').value;
+            const repeat = document.getElementById('eventRepeat').value;
+            const description = document.getElementById('eventDescription').value;
+            
+            if (!title || !date || !startTime || !endTime) {
+                alert('请填写所有必填字段');
+                return;
+            }
+            
+            if (selectedEvent) {
+                selectedEvent.title = title;
+                selectedEvent.date = date;
+                selectedEvent.startTime = startTime;
+                selectedEvent.endTime = endTime;
+                selectedEvent.repeat = repeat;
+                selectedEvent.description = description;
+            } else {
+                const newEvent = {
+                    id: Date.now().toString(),
+                    title,
+                    date,
+                    startTime,
+                    endTime,
+                    repeat,
+                    description,
+                    user: currentUser
+                };
+                events.push(newEvent);
+            }
+            
+            await saveEvents();
+            closeEventDialog();
+            renderCalendar();
+        }
+
+        async function deleteEvent() {
+            if (selectedEvent && confirm('确定要删除这个事件吗？')) {
+                events = events.filter(e => e.id !== selectedEvent.id);
+                await saveEvents();
+                closeEventDialog();
+                renderCalendar();
+            }
+        }
+
+        function getEventsForDay(date) {
+            const dateStr = formatDate(date);
+            return events.filter(event => {
+                if (event.user !== currentUser) return false;
+                
+                if (event.repeat === 'daily') {
+                    return new Date(event.date) <= date;
+                } else if (event.repeat === 'weekly') {
+                    const eventDate = new Date(event.date);
+                    if (eventDate > date) return false;
+                    return eventDate.getDay() === date.getDay();
+                } else {
+                    return event.date === dateStr;
+                }
+            });
+        }
+
+        // Navigation
+        function navigateDate(direction) {
+            if (currentView === 'day') {
+                currentDate.setDate(currentDate.getDate() + direction);
+            } else if (currentView === '3days') {
+                currentDate.setDate(currentDate.getDate() + (direction * 3));
+            } else if (currentView === 'week') {
+                currentDate.setDate(currentDate.getDate() + (direction * 7));
+            } else if (currentView === 'month') {
+                currentDate.setMonth(currentDate.getMonth() + direction);
+            }
+            
+            updateDateDisplay();
+            
+            if (currentView === 'month') {
+                renderMonthView();
+            } else if (currentView !== 'timetable') {
+                renderCalendar();
+            }
+        }
+
+        function goToToday() {
+            currentDate = new Date();
+            updateDateDisplay();
+            
+            if (currentView === 'month') {
+                renderMonthView();
+            } else if (currentView !== 'timetable') {
+                renderCalendar();
+            }
+        }
+
+        function updateDateDisplay() {
+            const options = { year: 'numeric', month: 'long' };
+            if (currentView === 'day') {
+                options.day = 'numeric';
+            }
+            document.getElementById('currentDate').textContent = currentDate.toLocaleDateString('zh-CN', options);
+        }
+
+        // Utilities
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function isToday(date) {
+            const today = new Date();
+            return date.getDate() === today.getDate() &&
+                   date.getMonth() === today.getMonth() &&
+                   date.getFullYear() === today.getFullYear();
+        }
+
+        function toggleSettings() {
+            const panel = document.getElementById('settingsPanel');
+            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.settings-panel') && !e.target.closest('.nav-btn')) {
+                document.getElementById('settingsPanel').style.display = 'none';
+            }
+        });
+    </script>
+</body>
 </html>
