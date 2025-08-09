@@ -820,20 +820,31 @@
             .header-right {
                 width: 100%;
                 justify-content: space-between;
+                flex-wrap: nowrap;
+                gap: 5px;
             }
 
             .date-navigator {
+                display: flex;
+                align-items: center;
+                gap: 5px;
                 flex: 1;
             }
 
             .nav-btn {
                 padding: 5px 8px;
                 font-size: 12px;
+                flex-shrink: 0;
             }
 
             .current-date {
-                font-size: 14px;
-                min-width: 120px;
+                font-size: 13px;
+                min-width: 100px;
+                text-align: center;
+                flex-shrink: 1;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
 
             .user-info {
@@ -848,14 +859,45 @@
                 color: #fff;
                 border: none;
                 font-size: 12px;
+                flex-shrink: 0;
             }
 
-            /* Time Grid Mobile */
+            /* Time Grid Mobile - Adaptive based on view */
             .time-header-cell {
-                min-width: 80px;
-                width: 80px;
                 font-size: 11px;
                 padding: 8px 5px;
+            }
+
+            /* Day view - wider columns for single day */
+            .time-grid[data-view="day"] .time-header-cell:not(:first-child),
+            .time-grid[data-view="day"] .day-column {
+                min-width: calc(100vw - 60px);
+                width: calc(100vw - 60px);
+            }
+
+            /* 3 Days view - optimized for mobile */
+            .time-grid[data-view="3days"] .time-header-cell:not(:first-child),
+            .time-grid[data-view="3days"] .day-column {
+                min-width: 110px;
+                width: 110px;
+            }
+
+            /* Week view - smaller columns */
+            .time-grid[data-view="week"] .time-header-cell:not(:first-child),
+            .time-grid[data-view="week"] .day-column {
+                min-width: 80px;
+                width: 80px;
+            }
+
+            /* Default for other views */
+            .time-header-cell:not(:first-child) {
+                min-width: 90px;
+                width: 90px;
+            }
+
+            .day-column {
+                min-width: 90px;
+                width: 90px;
             }
 
             .time-header-cell:first-child {
@@ -872,11 +914,6 @@
             .time-slot {
                 font-size: 9px;
                 padding-right: 4px;
-            }
-
-            .day-column {
-                min-width: 80px;
-                width: 80px;
             }
 
             .event {
@@ -982,6 +1019,32 @@
 
             .color-section {
                 max-height: 150px;
+            }
+
+            /* Landscape gets more width for columns */
+            .time-grid[data-view="3days"] .time-header-cell:not(:first-child),
+            .time-grid[data-view="3days"] .day-column {
+                min-width: 150px;
+                width: 150px;
+            }
+        }
+
+        /* Small phones (< 375px width) */
+        @media (max-width: 375px) {
+            .current-date {
+                font-size: 12px;
+                min-width: 80px;
+            }
+
+            .nav-btn {
+                padding: 5px 6px;
+                font-size: 11px;
+            }
+
+            .time-grid[data-view="3days"] .time-header-cell:not(:first-child),
+            .time-grid[data-view="3days"] .day-column {
+                min-width: 100px;
+                width: 100px;
             }
         }
 
@@ -1424,6 +1487,11 @@
 
         function renderCalendar() {
             const days = getDaysToShow();
+            
+            // Add data attribute for responsive column sizing
+            const timeGrid = document.getElementById('timeGrid');
+            timeGrid.setAttribute('data-view', currentView);
+            
             renderTimeHeader(days);
             renderTimeBody(days);
             renderEvents(days);
@@ -2006,11 +2074,29 @@
         }
 
         function updateDateDisplay() {
-            const options = { year: 'numeric', month: 'long' };
+            const options = { month: 'short', day: 'numeric' };
+            let displayText = '';
+            
             if (currentView === 'day') {
-                options.day = 'numeric';
+                displayText = currentDate.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', weekday: 'short' });
+            } else if (currentView === '3days') {
+                const endDate = new Date(currentDate);
+                endDate.setDate(currentDate.getDate() + 2);
+                displayText = `${currentDate.getMonth() + 1}/${currentDate.getDate()}-${endDate.getDate()}`;
+            } else if (currentView === 'week') {
+                const weekStart = new Date(currentDate);
+                const weekEnd = new Date(currentDate);
+                const dayOfWeek = currentDate.getDay();
+                weekStart.setDate(currentDate.getDate() - dayOfWeek);
+                weekEnd.setDate(weekStart.getDate() + 6);
+                displayText = `${weekStart.getMonth() + 1}/${weekStart.getDate()}-${weekEnd.getMonth() + 1}/${weekEnd.getDate()}`;
+            } else if (currentView === 'month') {
+                displayText = currentDate.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' });
+            } else {
+                displayText = currentDate.toLocaleDateString('zh-CN', options);
             }
-            document.getElementById('currentDate').textContent = currentDate.toLocaleDateString('zh-CN', options);
+            
+            document.getElementById('currentDate').textContent = displayText;
         }
 
         // Utilities
