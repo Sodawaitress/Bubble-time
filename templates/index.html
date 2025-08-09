@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BubbleTime</title>
-  <!-- 可选：动态 favicon -->
+  <!-- 可选：把 animated.gif 放到 /static/animated.gif -->
   <link rel="icon" type="image/gif" href="/static/animated.gif">
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -18,7 +18,6 @@
     .dialog { border:4px solid #000; }
     .rubber { position:absolute; background:rgba(0,0,0,.08); border:2px dashed #000; pointer-events:none; }
     .timecol { width:64px; }
-    .gridcol { left:64px; right:8px; position:absolute; }
     .sticky-top { position: sticky; top: 0; background:#fff; z-index: 5; }
   </style>
 </head>
@@ -34,17 +33,25 @@
   const toISO = (dateStr, timeStr)=> {
     const [y,m,d] = dateStr.split('-').map(Number);
     const [hh,mm] = timeStr.split(':').map(Number);
-    const dt = new Date(y, m-1, d, hh, mm, 0); // 本地时间 -> ISO(UTC)
+    const dt = new Date(y, m-1, d, hh, mm, 0); // 本地 -> ISO(UTC)
     return dt.toISOString();
   };
-  const fromISO = (iso)=> new Date(iso); // 浏览器会按本地时区解析 ISO
+  const fromISO = (iso)=> new Date(iso);
   const addDays = (date, days)=> { const d=new Date(date); d.setDate(d.getDate()+days); return d; };
-  const startOfWeek = (d)=> { const r=new Date(d); const day=(r.getDay()+7)%7; r.setDate(r.getDate()-day); r.setHours(0,0,0,0); return r; }; // 周一=1/周日=0？这里按周日为0
+  // 周一为一周第一天
+  const startOfWeek = (d)=> {
+    const r = new Date(d);
+    const day = (r.getDay() + 6) % 7; // 0=周一,6=周日
+    r.setDate(r.getDate() - day);
+    r.setHours(0,0,0,0);
+    return r;
+  };
+  // 月历矩阵（周一开头，6x7）
   const monthMatrix = (cur)=> {
-    // 返回当月 6 行 × 7 列的日期矩阵（包含上月/下月溢出）
     const first = new Date(cur.getFullYear(), cur.getMonth(), 1);
     const start = new Date(first);
-    start.setDate(1 - ((first.getDay()+7)%7)); // 从周日开始
+    const offset = (first.getDay() + 6) % 7; // 周一=0
+    start.setDate(1 - offset);
     const grid = [];
     for (let r=0; r<6; r++){
       const row=[];
@@ -56,6 +63,7 @@
     }
     return grid;
   };
+  const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
 
   async function httpJSON(url, opts={}){
     const res = await fetch(url, {credentials:'include', ...opts});
@@ -86,10 +94,12 @@
             </button>
             <div className="flex border-2 border-black">
               {['day','3day','week','month'].map(k=> (
-                <button key={k}
+                <button
+                  key={k}
                   onClick={()=>setView(k)}
-                  className={`px-4 py-2 border-r-2 border-black last:border-r-0 ${view===k?'bg-black text-white':'hover:bg-gray-100'}`}>
-                  {{day:'日', '3day':'3天', week:'周', month:'月'}[k]}
+                  className={`px-4 py-2 border-r-2 border-black last:border-r-0 ${view===k?'bg-black text-white':'hover:bg-gray-100'}`}
+                >
+                  {k==='day' ? '日' : (k==='3day' ? '3天' : (k==='week' ? '周' : '月'))}
                 </button>
               ))}
             </div>
@@ -98,7 +108,7 @@
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   // ---------- TimeGrid (Day/3-Day/Week) ----------
@@ -114,22 +124,21 @@
     const rbRef = useRef(null);
     const stateRef = useRef({dragging:false, col:0, startY:0, startHM:''});
 
+    const todayStr = ymd(new Date());
     const colCount = dates.length;
-    const colWidth = (containerWidth)=> (containerWidth - 64 - 8) / colCount; // 减去时间列与右边距
 
     function hmFromY(y, rect){
-      const relY = Math.max(0, Math.min(rect.height-1, y - rect.top));
+      const relY = clamp(y - rect.top, 0, rect.height-1);
       const minute = Math.round((relY % 60)/5)*5;
       const hourIdx = Math.floor(relY/60);
       const h = hours[Math.min(hourIdx, hours.length-1)];
       return pad(h)+':'+pad(minute);
     }
-
     function colFromX(x, rect){
-      const gridLeft = rect.left + 64; // 跳过时间列
+      const gridLeft = rect.left + 64;
       const usable = rect.width - 64 - 8;
       if (x < gridLeft) return 0;
-      const relX = Math.max(0, Math.min(usable-1, x - gridLeft));
+      const relX = clamp(x - gridLeft, 0, usable-1);
       const cw = usable / colCount;
       return Math.floor(relX / cw);
     }
@@ -137,8 +146,7 @@
     function onMouseDown(e){
       const container = wrapRef.current; if(!container) return;
       const rect = container.getBoundingClientRect();
-      // 在网格区域内才允许
-      if(e.clientX - rect.left < 64) return; // 在时间列，忽略
+      if(e.clientX - rect.left < 64) return;
       const col = colFromX(e.clientX, rect);
       stateRef.current.dragging = true;
       stateRef.current.col = col;
@@ -147,17 +155,16 @@
 
       const rb = rbRef.current;
       if(rb){
-        const cw = colWidth(rect.width);
+        const usable = rect.width - 64 - 8;
+        const cw = usable / colCount;
         rb.style.display = 'block';
-        rb.style.left = (64 + col*cw + 4) + 'px';
-        rb.style.right = '8px';
+        rb.style.left = (64 + col*cw + 8) + 'px';
+        rb.style.width = (cw - 16) + 'px';
         rb.style.top = (e.clientY - rect.top) + 'px';
-        rb.style.width = (cw - 8) + 'px';
         rb.style.height = '2px';
       }
       e.preventDefault();
     }
-
     function onMouseMove(e){
       if(!stateRef.current.dragging) return;
       const rect = wrapRef.current.getBoundingClientRect();
@@ -166,12 +173,11 @@
       const top = Math.min(y0,y1) - rect.top;
       const rb = rbRef.current;
       if(rb){
-        rb.style.top = Math.max(0, top) + 'px';
+        rb.style.top = clamp(top, 0, rect.height-2) + 'px';
         rb.style.height = Math.max(2, Math.abs(y1 - y0)) + 'px';
       }
       e.preventDefault();
     }
-
     function onMouseUp(e){
       if(!stateRef.current.dragging) return;
       const rect = wrapRef.current.getBoundingClientRect();
@@ -181,11 +187,10 @@
       const col = stateRef.current.col;
       stateRef.current.dragging = false;
       const rb = rbRef.current; if(rb) rb.style.display='none';
-      if(moved < 6) return; // 太短取消
+      if(moved < 6) return;
 
       const startHM = hmFromY(Math.min(y0,y1), rect);
       let endHM = hmFromY(Math.max(y0,y1), rect);
-      // 至少 5 分钟
       const [sh,sm] = startHM.split(':').map(Number);
       const [eh,em] = endHM.split(':').map(Number);
       let sMins = sh*60+sm, eMins = eh*60+em;
@@ -196,15 +201,14 @@
       onCreateRange(dateStr, startHM, endHM);
     }
 
-    const todayStr = ymd(new Date());
     return (
       <div className="border-2 border-black bg-white">
-        {/* 列头：日期在横轴 */}
+        {/* 列头：横轴日期（含星期，周一开头） */}
         <div className="sticky-top border-b-2 border-black">
           <div className="flex" style={{marginLeft:'64px', padding:'6px 8px'}}>
             {dates.map((d,i)=>(
               <div key={i} className="flex-1 text-center font-bold">
-                {ymd(d)}
+                {ymd(d)}&nbsp;{['一','二','三','四','五','六','日'][ (d.getDay()+6)%7 ]}
               </div>
             ))}
           </div>
@@ -212,24 +216,25 @@
 
         {/* 主网格 */}
         <div
-          className="relative select-none"
           ref={wrapRef}
-          style={{height: (hours.length*60)+'px'}}
+          className="relative select-none"
+          style={{height: ( ( (timeSettings.endHour - timeSettings.startHour + 24) % 24 ) + 1 )*60 + 'px'}}
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
         >
           <div ref={rbRef} className="rubber" style={{display:'none'}}></div>
 
-          {/* 横向小时线 + 左侧时间列 */}
           {hours.map((h)=> (
             <div key={h} className="relative" style={{height:'60px'}}>
               <div className="absolute w-full border-t border-gray-400" style={{top:0}}/>
               <div className="absolute left-0 top-0 timecol h-full bg-gray-50 border-r border-black flex items-start pt-1 px-2">
                 <span className="text-xs font-mono">{h===0?'12AM':h<12?`${h}AM`:h===12?'12PM':`${h-12}PM`}</span>
               </div>
-              {/* 每列的 30 分线 + 15/45 刻度 */}
-              <div className="absolute gridcol top-0 h-full" style={{display:'grid', gridTemplateColumns:`repeat(${dates.length}, 1fr)`, gap:'8px'}}>
+              <div className="absolute top-0 h-full" style={{
+                left:'64px', right:'8px', display:'grid',
+                gridTemplateColumns:`repeat(${dates.length}, 1fr)`, gap:'8px'
+              }}>
                 {dates.map((_,ci)=>(
                   <div key={ci} className="relative h-full">
                     <div className="absolute w-full border-t border-gray-300" style={{top:'30px'}}/>
@@ -253,16 +258,16 @@
             const sy = si*60 + sm, ey = (ei!==-1? ei*60+em : sy+60);
             const h = Math.max(ey-sy, 25);
 
+            const gridLeft = 64, gridRightPad = 8;
             return (
               <div key={ev.id}
                 onClick={(e)=>{e.stopPropagation(); onEventClick(ev);}}
                 className="absolute z-10 border-2 border-black bg-gray-200 hover:bg-gray-300 cursor-pointer"
                 style={{
-                  // 事件块按列定位
                   top: (sy+1)+'px',
                   height:(h-2)+'px',
-                  left: `calc(64px + ${(100/dates.length)*dIndex}% + 8px)`,
-                  width: `calc(${100/dates.length}% - 16px - 64px/${dates.length})`
+                  left: `calc(${gridLeft}px + (${dIndex} * (100% - ${gridLeft+gridRightPad}px) / ${dates.length}) + 8px)`,
+                  width: `calc((100% - ${gridLeft+gridRightPad}px)/${dates.length} - 16px)`
                 }}>
                 <div className="p-1.5 h-full overflow-hidden">
                   <div className="font-bold text-sm truncate">{ev.title}</div>
@@ -272,32 +277,32 @@
             )
           })}
 
-          {/* 当前时间指示线：仅在“今天”的列显示 */}
+          {/* 今日时间线（仅“今天”所在列显示） */}
           {dates.map((d,ci)=>{
             if(ymd(d)!==todayStr) return null;
             const now = new Date();
-            const y = (hours.indexOf(now.getHours())===-1) ? null : (hours.indexOf(now.getHours())*60 + now.getMinutes());
-            if(y===null) return null;
+            const y = hours.indexOf(now.getHours());
+            if(y===-1) return null;
+            const py = y*60 + now.getMinutes();
+            const gridLeft = 64, gridRightPad = 8;
             return (
-              <React.Fragment key={'now-'+ci}>
-                <div className="absolute z-30 border-t-2 border-black"
-                     style={{
-                      top:y+'px',
-                      left:`calc(64px + ${(100/dates.length)*ci}% + 8px)`,
-                      width:`calc(${100/dates.length}% - 16px - 64px/${dates.length})`
-                     }}/>
-              </React.Fragment>
+              <div key={'now-'+ci}
+                   className="absolute z-30 border-t-2 border-black"
+                   style={{
+                    top:py+'px',
+                    left: `calc(${gridLeft}px + (${ci} * (100% - ${gridLeft+gridRightPad}px) / ${dates.length}) + 8px)`,
+                    width: `calc((100% - ${gridLeft+gridRightPad}px)/${dates.length} - 16px)`
+                   }}/>
             );
           })}
         </div>
       </div>
-    )
+    );
   }
 
   // ---------- Month Grid ----------
   function MonthGrid({monthDate, events, onDayClick, onEventClick}){
     const matrix = useMemo(()=> monthMatrix(monthDate), [monthDate]);
-    const curYM = monthDate.getFullYear()+'-'+(monthDate.getMonth()+1);
 
     const evMap = useMemo(()=>{
       const m = new Map();
@@ -310,9 +315,8 @@
 
     return (
       <div className="border-2 border-black bg-white">
-        {/* 星期标题 */}
         <div className="grid grid-cols-7 border-b-2 border-black sticky-top">
-          {['日','一','二','三','四','五','六'].map((w,i)=>(
+          {['一','二','三','四','五','六','日'].map((w,i)=>(
             <div key={i} className="text-center font-bold p-2">{w}</div>
           ))}
         </div>
@@ -322,9 +326,11 @@
             const inMonth = d.getMonth()===monthDate.getMonth();
             const dayEvents = evMap.get(ds)||[];
             return (
-              <div key={idx}
-                   className={`border border-gray-300 min-h-[96px] p-1 ${inMonth?'bg-white':'bg-gray-100'}`}
-                   onClick={(e)=>{ e.stopPropagation(); onDayClick(ds); }}>
+              <div
+                key={idx}
+                className={`border border-gray-300 min-h-[96px] p-1 ${inMonth?'bg-white':'bg-gray-100 opacity-70 cursor-not-allowed'}`}
+                onClick={(e)=>{ if(!inMonth) return; e.stopPropagation(); onDayClick(ds); }}
+              >
                 <div className="text-xs font-bold">{d.getDate()}</div>
                 <div className="mt-1 space-y-1">
                   {dayEvents.slice(0,3).map(ev=>(
@@ -356,26 +362,13 @@
     const [showTimeSettings, setShowTimeSettings] = useState(false);
     const [loading, setLoading] = useState(false);
 
-    // 可见范围（根据视图）决定 /api/events 查询区间
     function visibleRange(d, v){
-      if(v==='day'){
-        const s = new Date(d); s.setHours(0,0,0,0);
-        const e = addDays(s, 1);
-        return [s,e];
-      }else if(v==='3day'){
-        const s = new Date(d); s.setHours(0,0,0,0);
-        const e = addDays(s, 3);
-        return [s,e];
-      }else if(v==='week'){
-        const s = startOfWeek(d); // 周日开头
-        const e = addDays(s, 7);
-        return [s,e];
-      }else{ // month
-        const s = new Date(d.getFullYear(), d.getMonth(), 1);
-        const e = new Date(d.getFullYear(), d.getMonth()+1, 1);
-        // 多取前后几天，确保跨月的重复实例也能展开
-        return [addDays(s,-7), addDays(e,7)];
-      }
+      if(v==='day'){ const s=new Date(d); s.setHours(0,0,0,0); return [s, addDays(s,1)]; }
+      if(v==='3day'){ const s=new Date(d); s.setHours(0,0,0,0); return [s, addDays(s,3)]; }
+      if(v==='week'){ const s=startOfWeek(d); return [s, addDays(s,7)]; }
+      const s = new Date(d.getFullYear(), d.getMonth(), 1);
+      const e = new Date(d.getFullYear(), d.getMonth()+1, 1);
+      return [addDays(s,-7), addDays(e,7)];
     }
 
     async function load(){
@@ -403,7 +396,7 @@
         setLoading(false);
       }
     }
-    useEffect(()=>{ load(); },[view, date]); // 视图/日期改变时重载
+    useEffect(()=>{ load(); },[view, date]);
 
     const navigate = (dir)=>{
       const d = new Date(date);
@@ -469,7 +462,6 @@
       }
     }
 
-    // 视图日期范围标签
     const rangeLabel = (()=> {
       if(view==='day') return ymd(date);
       if(view==='3day') return `${ymd(date)} ~ ${ymd(addDays(date,2))}`;
@@ -480,7 +472,6 @@
       return `${date.getFullYear()}-${pad(date.getMonth()+1)}`;
     })();
 
-    // 每个视图要显示的日期列
     const datesForView = (()=> {
       if(view==='day') return [new Date(date)];
       if(view==='3day') return [0,1,2].map(i=> addDays(date,i));
@@ -595,12 +586,8 @@
                   onClick={()=> { setFormOpen(false); setEditing(null); }}>
                   取消
                 </button>
-                {editing && (
-                  <button className="btn flex-none" onClick={()=> remove(false)}>删除</button>
-                )}
-                {editing && editing.rrule && (
-                  <button className="btn flex-none" onClick={()=> remove(true)}>仅删这一次</button>
-                )}
+                {editing && <button className="btn flex-none" onClick={()=> remove(false)}>删除</button>}
+                {editing && editing.rrule && <button className="btn flex-none" onClick={()=> remove(true)}>仅删这一次</button>}
                 <button className="btn flex-1" onClick={save} disabled={!form.title.trim()}>
                   {editing? '保存':'创建'}
                 </button>
