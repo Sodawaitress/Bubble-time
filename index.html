@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pride Calendar</title>
+    <style>
+      /* Minimal UI */
+      :root{ --bg:#faf9f7; --line:#e6e3df; --text:#222; --muted:#777; }
+      html,body,#root{ height:100%; }
+      body{ margin:0; background:var(--bg); color:var(--text); font:14px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial; }
+      header{ display:flex; gap:8px; align-items:center; padding:10px 12px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:5;}
+      button,select,input{ border:1px solid var(--line); background:#fff; padding:6px 10px; border-radius:8px; }
+      .spacer{ flex:1; }
+      .drawer{ position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line); padding:12px; border-radius:14px 14px 0 0; box-shadow:0 -6px 16px rgba(0,0,0,.08); }
+      .row{ display:flex; gap:8px; margin:8px 0;}
+      .label{ width:84px; color:var(--muted); }
+      .grid{ display:grid; grid-template-columns: repeat(auto-fit,minmax(120px,1fr)); gap:8px; }
+      .pill{ padding:6px 10px; border:1px solid var(--line); border-radius:999px; display:inline-flex; gap:6px; align-items:center; cursor:pointer; }
+      .timetable{ padding:12px; }
+      .fc .fc-toolbar-title{ font-weight:600; }
+      .fc .fc-timegrid-slot{ height: 20px; } /* compact slots */
+      .fc .fc-col-header-cell-cushion{ padding:6px 4px; }
+      .flag-swatch{ width:14px; height:14px; border-radius:3px; display:inline-block; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

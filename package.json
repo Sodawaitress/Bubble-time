@@ -1,0 +1,33 @@
+{
+  "name": "pride-calendar",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && tsc -p server.tsconfig.json",
+    "postinstall": "prisma generate && prisma db push",
+    "start": "node dist-server/server.js"
+  },
+  "dependencies": {
+    "@fullcalendar/core": "^6.1.15",
+    "@fullcalendar/daygrid": "^6.1.15",
+    "@fullcalendar/interaction": "^6.1.15",
+    "@fullcalendar/react": "^6.1.15",
+    "@fullcalendar/rrule": "^6.1.15",
+    "@fullcalendar/timegrid": "^6.1.15",
+    "dom-to-image-more": "^3.5.0",
+    "express": "^4.19.2",
+    "rrule": "^2.8.1",
+    "@prisma/client": "^5.16.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "prisma": "^5.16.2",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.1",
+    "@types/express": "^4.17.21"
+  }
+}
