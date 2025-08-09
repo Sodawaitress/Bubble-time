@@ -1,1 +1,97 @@
-<index.html content here>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/babel-standalone@6/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #calendar { max-width: 900px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <h1>📅 Calendar App</h1>
+  <div id="calendar"></div>
+
+{% raw %}
+<script type="text/babel">
+function CalendarApp() {
+  const calendarRef = React.useRef(null);
+  const [events, setEvents] = React.useState([]);
+
+  const loadEvents = () => {
+    fetch("/api/events")
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setEvents(data.data);
+        }
+      });
+  };
+
+  React.useEffect(() => {
+    loadEvents();
+    const calendarEl = document.getElementById("calendar");
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+      initialView: "timeGridWeek",
+      slotDuration: "00:05:00", // 5 分钟
+      selectable: true,
+      editable: true,
+      events: events,
+      select: function(info) {
+        const title = prompt("Event Title:");
+        if (title) {
+          fetch("/api/events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title, start: info.startStr, end: info.endStr })
+          }).then(() => loadEvents());
+        }
+        calendar.unselect();
+      },
+      eventDrop: function(info) {
+        fetch(`/api/events/${info.event.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: info.event.title,
+            start: info.event.start.toISOString(),
+            end: info.event.end.toISOString()
+          })
+        }).then(() => loadEvents());
+      },
+      eventResize: function(info) {
+        fetch(`/api/events/${info.event.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: info.event.title,
+            start: info.event.start.toISOString(),
+            end: info.event.end.toISOString()
+          })
+        }).then(() => loadEvents());
+      },
+      eventClick: function(info) {
+        if (confirm("Delete this event?")) {
+          fetch(`/api/events/${info.event.id}`, { method: "DELETE" })
+            .then(() => loadEvents());
+        }
+      }
+    });
+    calendar.render();
+    calendarRef.current = calendar;
+  }, [events]);
+
+  return null;
+}
+
+ReactDOM.render(<CalendarApp />, document.getElementById("calendar"));
+</script>
+{% endraw %}
+
+</body>
+</html>
