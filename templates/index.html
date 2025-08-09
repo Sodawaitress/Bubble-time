@@ -4,7 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>黑白日历</title>
+  <link rel="icon" type="image/gif" href="/static/animated.gif">
+  <title>BubbleTime</title>
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -24,16 +25,20 @@
   <div id="app"></div>
 
   <script type="text/babel">
+  const formatDate = (d)=> `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   const {useState, useEffect, useMemo, useRef} = React;
 
   const pad = (n)=> String(n).padStart(2,'0');
-  const ymd = (d)=> d.toISOString().split('T')[0];
+  // 本地日期字符串（不再用 toISOString 避免被 UTC 偏移）
+  const ymd = (d)=> `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  // 把“本地的 yyyy-mm-dd hh:mm”转成 ISO（后端存 UTC）
   const toISO = (dateStr, timeStr)=> {
     const [y,m,d] = dateStr.split('-').map(Number);
     const [hh,mm] = timeStr.split(':').map(Number);
-    const dt = new Date(Date.UTC(y, m-1, d, hh, mm, 0));
+    const dt = new Date(y, m-1, d, hh, mm, 0);  // 本地时间
     return dt.toISOString();
   };
+
   const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
 
   async function httpJSON(url, opts={}){
@@ -50,13 +55,13 @@
     return ct.includes('application/json') ? res.json() : res.text();
   }
 
-  function Header({view, setView, timeSettings, setShowTimeSettings, navigate}){
+  function Header({view, setView, timeSettings, setShowTimeSettings, navigate, date}){
     return (
       <div className="border-b-2 border-black pb-4 mb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-7 h-7 border-2 border-black flex items-center justify-center font-bold">📅</div>
-            <h1 className="text-2xl font-bold">黑白日历</h1>
+            <h1 className="text-2xl font-bold">Calendar</h1>
           </div>
           <div className="flex items-center gap-3">
             <button onClick={()=>setShowTimeSettings(true)} className="btn btn-ghost flex items-center gap-2">
@@ -179,6 +184,8 @@
             <div key={h} className="relative" style={{height:'60px'}}>
               <div className="absolute w-full border-t border-gray-400" style={{top:0}}/>
               <div className="absolute left-0 top-0 timecol h-full bg-gray-50 border-r border-black flex items-start pt-1 px-2">
+                <span className="px-3 py-2 border-2 border-black">{formatDate(date)}</span>
+
                 <span className="text-xs font-mono">{h===0?'12AM':h<12?`${h}AM`:h===12?'12PM':`${h-12}PM`}</span>
               </div>
               <div className="absolute gridcol top-0 h-full">
@@ -247,9 +254,9 @@
           const p = (n)=> String(n).padStart(2,'0');
           return {
             id: e.id, title: e.title||'', notes:e.notes||'',
-            date: s.toISOString().split('T')[0],
-            time: p(s.getUTCHours())+':'+p(s.getUTCMinutes()),
-            endTime: p(ee.getUTCHours())+':'+p(ee.getUTCMinutes()),
+            date: ymd(s),
+            time: p(s.getHours())+':'+p(s.getMinutes()),
+            endTime: p(ee.getHours())+':'+p(ee.getMinutes()),
             rrule: e.rrule || null
           };
         });
@@ -325,8 +332,15 @@
     return (
       <div className="min-h-screen bg-white">
         <div className="max-w-6xl mx-auto p-4">
-          <Header view={view} setView={setView} timeSettings={timeSettings}
-                  setShowTimeSettings={setShowTimeSettings} navigate={navigate}/>
+          <Header
+            view={view}
+            setView={setView}
+            timeSettings={timeSettings}
+            setShowTimeSettings={setShowTimeSettings}
+            navigate={navigate}
+            date={date}
+          />
+
           {loading && <div className="text-sm text-gray-600 mb-2">加载中…</div>}
           <TimeGridDay
             date={date}
