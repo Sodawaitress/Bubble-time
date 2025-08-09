@@ -68,7 +68,7 @@
 
   async function httpJSON(url, opts={}){
     const res = await fetch(url, {credentials:'include', ...opts});
-    if (res.redirected && res.url.includes('/login')) {
+    if (res.redirected && res.url.includes('/login')) { console.warn('[httpJSON] redirected to login');
       window.location.href = res.url;
       throw new Error('Not logged in');
     }
@@ -81,12 +81,11 @@
   }
 
   // ---------- Header ----------
-  function Header({view, setView, timeSettings, setShowTimeSettings, navigate, rangeLabel, user}){
+  function Header({view, setView, timeSettings, setShowTimeSettings, navigate, rangeLabel, user, eventCount}){
     return (
       <div className="border-b-2 border-black pb-4 mb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {/* 认证区 */}
             {user ? (
               <form method="post" action="/logout">
                 <button type="submit" className="btn">退出登录</button>
@@ -98,22 +97,11 @@
               </>
             )}
 
+            <span className="px-2 py-1 border-2 border-black">evs: {eventCount}</span>
             <h1 className="text-2xl font-bold">calendar</h1>
             <span className="px-2 py-1 border-2 border-black">{rangeLabel}</span>
           </div>
           <div className="flex items-center gap-3">
-            {/* 认证区 */}
-            {user ? (
-              <form method="post" action="/logout">
-                <button type="submit" className="btn">退出登录</button>
-              </form>
-            ) : (
-              <>
-                <a href="/login" className="btn btn-ghost">登录</a>
-                <a href="/register" className="btn">注册</a>
-              </>
-            )}
-
             <button onClick={()=>setShowTimeSettings(true)} className="btn btn-ghost flex items-center gap-2">
               ⏱ {pad(timeSettings.startHour)}:00–{pad(timeSettings.endHour)}:00
             </button>
@@ -387,12 +375,11 @@
     const [showTimeSettings, setShowTimeSettings] = useState(false);
     const [loading, setLoading] = useState(false);
     const [user, setUser] = useState(false);
-
     useEffect(()=>{
       fetch('/status', {credentials:'include'})
         .then(r=>r.json())
-        .then(d=> setUser(!!d.user))
-        .catch(()=> setUser(false));
+        .then(d=> { console.log('[status]', d); setUser(!!d.user); })
+        .catch(err=> { console.warn('[status] failed', err); setUser(false); });
     },[]);
 
     function visibleRange(d, v){
@@ -409,7 +396,9 @@
       try{
         const [s,e] = visibleRange(date, view);
         const q = new URLSearchParams({ start: s.toISOString(), end: e.toISOString() }).toString();
+        console.log('[load] range', s.toISOString(), e.toISOString());
         const arr = await httpJSON('/api/events?'+q);
+        console.log('[load] got', Array.isArray(arr)? arr.length : arr, arr);
         const mapped = (arr||[]).map(e=>{
           const s = fromISO(e.start);
           const ee = fromISO(e.end);
@@ -467,8 +456,10 @@
           payload.end = dt.toISOString();
         }
         if(editing){
+          console.log('[save:PUT] payload', payload);
           await httpJSON('/api/events/'+editing.id, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
         }else{
+          console.log('[save:POST] payload', payload);
           await httpJSON('/api/events', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
         }
         setFormOpen(false); setEditing(null);
